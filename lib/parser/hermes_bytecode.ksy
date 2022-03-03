@@ -160,6 +160,7 @@ types:
         type: u1
       - id: flags
         type: function_header_flag
+        size: 1
     instances:
       bytecode:
         io: _root._io
