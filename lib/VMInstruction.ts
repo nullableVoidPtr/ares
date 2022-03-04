@@ -1,203 +1,203 @@
-// deno-lint-ignore-file no-empty-interface
-
 export type RegisterIndex = number;
 
-export interface VMInstruction {}
+export type HermesString = string & {
+	stringTableIndex: number;
+}
 
-export interface UnreachableOp extends VMInstruction {}
+export interface VMInstruction {
+	functionLocalOffset: number;
+	isLongVariant: boolean;
+}
 
-export interface NewObjectWithBufferInst extends VMInstruction {
+export interface AssigningInstruction extends VMInstruction {
 	destination: RegisterIndex;
+}
+
+export interface UnaryOperationInst extends AssigningInstruction {
+	operand: RegisterIndex;
+}
+
+export interface BinaryOperationInst extends AssigningInstruction {
+	left: RegisterIndex;
+	right: RegisterIndex;
+}
+
+export interface BranchInstruction extends VMInstruction {
+	target: number;
+}
+
+export interface BranchingBinaryInstuction extends BranchInstruction {
+	left: RegisterIndex;
+	right: RegisterIndex;
+}
+
+export interface WASMSpecificInstruction extends VMInstruction {
+	isWASM: true;
+}
+
+export class UnreachableOp implements VMInstruction {}
+
+export class NewObjectWithBufferInst implements AssigningInstruction {
 	sizeHint: number;
 	noOfStaticElements: number;
 	objectKeyBufferIndex: number;
 	objectValueBufferIndex: number;
 }
 
-export interface NewObjectInst extends VMInstruction {
-	destination: RegisterIndex;
-}
+export class NewObjectInst implements AssigningInstruction {}
 
-export interface NewObjectWithParentInst extends VMInstruction {
-	destination: RegisterIndex;
+export class NewObjectWithParentInst implements AssigningInstruction {
 	parent: RegisterIndex;
 }
 
-export interface NewArrayWithBufferInst extends VMInstruction {
-	destination: RegisterIndex;
+export class NewArrayWithBufferInst implements AssigningInstruction {
 	sizeHint: number;
 	noOfStaticElements: number;
 	arrayBufferIndex: number;
 }
 
-export interface NewArrayInst extends VMInstruction {
-	destination: RegisterIndex;
+export class NewArrayInst implements AssigningInstruction {
 	size: number;
 }
 
-export interface MovInst extends VMInstruction {
-	destination: RegisterIndex;
+export class MovInst implements AssigningInstruction {
 	source: RegisterIndex;
 }
 
-export interface UnaryOperationInst extends VMInstruction {
-	destination: RegisterIndex;
-	operand: RegisterIndex;
-}
+export class NegateInst implements UnaryOperationInst {}
+export class NotInst implements UnaryOperationInst {}
+export class BitNotInst implements UnaryOperationInst {}
+export class TypeOfInst implements UnaryOperationInst {}
+export class EqInst implements BinaryOperationInst {}
+export class StrictEqInst implements BinaryOperationInst {}
+export class NeqInst implements BinaryOperationInst {}
+export class StrictNeqInst implements BinaryOperationInst {}
+export class LessInst implements BinaryOperationInst {}
+export class LessEqInst implements BinaryOperationInst {}
+export class GreaterInst implements BinaryOperationInst {}
+export class GreaterEqInst implements BinaryOperationInst {}
+export class AddInst implements BinaryOperationInst {}
+export class AddNInst implements BinaryOperationInst {}
+export class MulInst implements BinaryOperationInst {}
+export class MulNInst implements BinaryOperationInst {}
+export class DivInst implements BinaryOperationInst {}
+export class DivNInst implements BinaryOperationInst {}
+export class ModInst implements BinaryOperationInst {}
+export class SubInst implements BinaryOperationInst {}
+export class SubNInst implements BinaryOperationInst {}
+export class LShiftInst implements BinaryOperationInst {}
+export class RShiftInst implements BinaryOperationInst {}
+export class URShiftInst implements BinaryOperationInst {}
+export class BitAndInst implements BinaryOperationInst {}
+export class BitXorInst implements BinaryOperationInst {}
+export class BitOrInst implements BinaryOperationInst {}
+export class InstanceOfInst implements BinaryOperationInst {}
+export class IsInInst implements BinaryOperationInst {}
 
-export interface BinaryOperationInst extends VMInstruction {
-	destination: RegisterIndex;
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
-
-export interface NegateInst extends UnaryOperationInst {}
-export interface NotInst extends UnaryOperationInst {}
-export interface BitNotInst extends UnaryOperationInst {}
-export interface TypeOfInst extends UnaryOperationInst {}
-export interface EqInst extends BinaryOperationInst {}
-export interface StrictEqInst extends BinaryOperationInst {}
-export interface NeqInst extends BinaryOperationInst {}
-export interface StrictNeqInst extends BinaryOperationInst {}
-export interface LessInst extends BinaryOperationInst {}
-export interface LessEqInst extends BinaryOperationInst {}
-export interface GreaterInst extends BinaryOperationInst {}
-export interface GreaterEqInst extends BinaryOperationInst {}
-export interface AddInst extends BinaryOperationInst {}
-export interface AddNInst extends BinaryOperationInst {}
-export interface MulInst extends BinaryOperationInst {}
-export interface MulNInst extends BinaryOperationInst {}
-export interface DivInst extends BinaryOperationInst {}
-export interface DivNInst extends BinaryOperationInst {}
-export interface ModInst extends BinaryOperationInst {}
-export interface SubInst extends BinaryOperationInst {}
-export interface SubNInst extends BinaryOperationInst {}
-export interface LShiftInst extends BinaryOperationInst {}
-export interface RShiftInst extends BinaryOperationInst {}
-export interface URShiftInst extends BinaryOperationInst {}
-export interface BitAndInst extends BinaryOperationInst {}
-export interface BitXorInst extends BinaryOperationInst {}
-export interface BitOrInst extends BinaryOperationInst {}
-export interface InstanceOfInst extends BinaryOperationInst {}
-export interface IsInInst extends BinaryOperationInst {}
-
-export interface GetEnvironmentInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetEnvironmentInst implements AssigningInstruction {
 	levelIndex: number;
 }
 
-export interface StoreToEnvironmentInst extends VMInstruction {
+export class StoreToEnvironmentInst implements VMInstruction {
 	environment: RegisterIndex;
 	slotIndex: number;
 	value: RegisterIndex;
 }
 
-export interface StoreNPToEnvironmentInst extends VMInstruction {
+export class StoreNPToEnvironmentInst implements VMInstruction {
 	environment: RegisterIndex;
 	slotIndex: number;
 	value: RegisterIndex;
 }
 
-export interface LoadFromEnvironmentInst extends VMInstruction {
-	destination: RegisterIndex;
+export class LoadFromEnvironmentInst implements AssigningInstruction {
 	environment: RegisterIndex;
 	slotIndex: number;
 }
 
-export interface GetGlobalObjectInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetGlobalObjectInst implements AssigningInstruction {}
+
+export class GetNewTargetInst implements AssigningInstruction {}
+
+export class CreateEnvironmentInst implements AssigningInstruction {}
+
+export class DeclareGlobalVarInst implements VMInstruction {
+	identifier: HermesString;
 }
 
-export interface GetNewTargetInst extends VMInstruction {
-	destination: RegisterIndex;
-}
-
-export interface CreateEnvironmentInst extends VMInstruction {
-	destination: RegisterIndex;
-}
-
-export interface DeclareGlobalVarInst extends VMInstruction {
-	identifier: string;
-}
-
-export interface GetByIdInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetByIdInst implements AssigningInstruction {
 	object: RegisterIndex;
 	cacheIndex: number;
-	property: string;
+	property: HermesString;
 }
 
-export interface TryGetByIdInst extends VMInstruction {
-	destination: RegisterIndex;
+export class TryGetByIdInst implements AssigningInstruction {
 	object: RegisterIndex;
 	cacheIndex: number;
-	property: string;
+	property: HermesString;
 }
 
-export interface PutByIdInst extends VMInstruction {
+export class PutByIdInst implements VMInstruction {
 	object: RegisterIndex;
 	value: RegisterIndex;
 	cacheIndex: number;
-	property: string;
+	property: HermesString;
 }
 
-export interface TryPutByIdInst extends VMInstruction {
+export class TryPutByIdInst implements VMInstruction {
 	object: RegisterIndex;
 	value: RegisterIndex;
 	cacheIndex: number;
-	property: string;
+	property: HermesString;
 }
 
-export interface PutNewOwnByIdInst extends VMInstruction {
+export class PutNewOwnByIdInst implements VMInstruction {
 	object: RegisterIndex;
 	value: RegisterIndex;
-	property: string;
+	property: HermesString;
 }
 
-export interface PutNewOwnNEByIdInst extends VMInstruction {
+export class PutNewOwnNEByIdInst implements VMInstruction {
 	object: RegisterIndex;
 	value: RegisterIndex;
-	property: string;
+	property: HermesString;
 }
 
-export interface PutOwnByIndexInst extends VMInstruction {
+export class PutOwnByIndexInst implements VMInstruction {
 	object: RegisterIndex;
 	value: RegisterIndex;
 	property: RegisterIndex;
 }
 
-export interface PutOwnByValInst extends VMInstruction {
+export class PutOwnByValInst implements VMInstruction {
 	object: RegisterIndex;
 	value: RegisterIndex;
 	property: RegisterIndex;
 	enumerable: boolean;
 }
 
-export interface DelByIdInst extends VMInstruction {
-	destination: RegisterIndex;
+export class DelByIdInst implements AssigningInstruction {
 	object: RegisterIndex;
-	property: string;
+	property: HermesString;
 }
 
-export interface GetByValInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetByValInst implements AssigningInstruction {
 	object: RegisterIndex;
 	property: RegisterIndex;
 }
 
-export interface PutByValInst extends VMInstruction {
+export class PutByValInst implements VMInstruction {
 	object: RegisterIndex;
 	property: RegisterIndex;
 	value: RegisterIndex;
 }
 
-export interface DelByValInst extends VMInstruction {
-	destination: RegisterIndex;
+export class DelByValInst implements AssigningInstruction {
 	object: RegisterIndex;
 	property: RegisterIndex;
 }
 
-export interface PutOwnGetterSetterByValInst extends VMInstruction {
+export class PutOwnGetterSetterByValInst implements VMInstruction {
 	object: RegisterIndex;
 	property: RegisterIndex;
 	getter: RegisterIndex;
@@ -205,179 +205,148 @@ export interface PutOwnGetterSetterByValInst extends VMInstruction {
 	enumerable: booleano;
 }
 
-export interface GetPNameListInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetPNameListInst implements AssigningInstruction {
 	object: RegisterIndex;
 	index: RegisterIndex;
 	propertyListSize: RegisterIndex;
 }
 
-export interface GetNextPNameInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetNextPNameInst implements AssigningInstruction {
 	object: RegisterIndex;
 	index: RegisterIndex;
 	propertyListSize: RegisterIndex;
 }
 
-export interface CallInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CallInst implements AssigningInstruction {
 	closure: RegisterIndex;
 	argumentCount: number;
 }
 
-export interface ConstructInst extends VMInstruction {
-	destination: RegisterIndex;
+export class ConstructInst implements AssigningInstruction {
 	closure: RegisterIndex;
 	argumentCount: number;
 }
 
-export interface CallNInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CallNInst implements AssigningInstruction {
 	closure: RegisterIndex;
 	arguments: RegisterIndex[];
 }
 
-export interface CallDirectInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CallDirectInst implements AssigningInstruction {
 	argumentCount: number;
 	functionIndex: RegisterIndex;
 }
 
-export interface CallBuiltinInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CallBuiltinInst implements AssigningInstruction {
 	builtinNo: RegisterIndex;
 	argumentCount: number;
 }
 
-export interface CallBuiltinClosureInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CallBuiltinClosureInst implements AssigningInstruction {
 	builtinNo: RegisterIndex;
 }
 
-export interface RetInst extends VMInstruction {
+export class RetInst implements VMInstruction {
 	argument: RegisterIndex;
 }
 
-export interface CatchInst extends VMInstruction {
+export class CatchInst implements VMInstruction {
 	exception: RegisterIndex;
 }
 
-export interface DirectEvalInst extends VMInstruction {
-	destination: RegisterIndex;
+export class DirectEvalInst implements AssigningInstruction {
 	code: RegisterIndex;
 }
 
-export interface ThrowInst extends VMInstruction {
+export class ThrowInst implements VMInstruction {
 	exception: RegisterIndex;
 }
 
-export interface ThrowIfEmptyInst extends VMInstruction {
-	destination: RegisterIndex;
+export class ThrowIfEmptyInst implements AssigningInstruction {
 	source: RegisterIndex;
 }
 
-export interface DebuggerInst extends VMInstruction {}
+export class DebuggerInst implements VMInstruction {}
 
-export interface AsyncBreakCheckInst extends VMInstruction {}
+export class AsyncBreakCheckInst implements VMInstruction {}
 
-export interface ProfilePointInst extends VMInstruction {
+export class ProfilePointInst implements VMInstruction {
 	profilePoint: number;
 }
 
-export interface CreateClosureInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CreateClosureInst implements AssigningInstruction {
 	environment: RegisterIndex;
 	functionIndex: number;
 }
 
-export interface CreateGeneratorClosureInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CreateGeneratorClosureInst implements AssigningInstruction {
 	environment: RegisterIndex;
 	functionIndex: number;
 }
 
-export interface CreateAsyncClosureInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CreateAsyncClosureInst implements AssigningInstruction {
 	environment: RegisterIndex;
 	functionIndex: number;
 }
 
-export interface CreateThisInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CreateThisInst implements AssigningInstruction {
 	prototype: RegisterIndex;
-	constructor: RegisterIndex;
+	constructorRef: RegisterIndex;
 }
 
-export interface SelectObjectInst extends VMInstruction {
-	destination: RegisterIndex;
+export class SelectObjectInst implements AssigningInstruction {
 	thisObject: RegisterIndex;
 	constructorReturnValue: RegisterIndex;
 }
 
-export interface LoadParamInst extends VMInstruction {
-	destination: RegisterIndex;
+export class LoadParamInst implements AssigningInstruction {
 	parameterIndex: RegisterIndex;
 }
 
-export interface LoadParamInst extends VMInstruction {
-	destination: RegisterIndex;
-	parameterIndex: RegisterIndex;
+export class HermesEmpty {}
+
+export class LoadConstInst implements AssigningInstruction {
+	value: number | HermesString | HermesEmpty | void | null | boolean;
 }
 
-export interface HermesEmpty {}
-
-export interface LoadConstInst extends VMInstruction {
-	destination: RegisterIndex;
-	value: number | string | HermesEmpty | void | null | boolean;
-}
-
-export interface CoerceThisNSInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CoerceThisNSInst implements AssigningInstruction {
 	argument: RegisterIndex;
 }
 
-export interface LoadThisNSInst extends VMInstruction {
-	destination: RegisterIndex;
-}
+export class LoadThisNSInst implements AssigningInstruction {}
 
-export interface ToNumberInst extends VMInstruction {
-	destination: RegisterIndex;
+export class ToNumberInst implements AssigningInstruction {
 	argument: RegisterIndex;
 }
 
-export interface ToInt32Inst extends VMInstruction {
-	destination: RegisterIndex;
+export class ToInt32Inst implements AssigningInstruction {
 	argument: RegisterIndex;
 }
 
-export interface AddEmptyStringInst extends VMInstruction {
-	destination: RegisterIndex;
+export class AddEmptyStringInst implements AssigningInstruction {
 	argument: RegisterIndex;
 }
 
-export interface GetArgumentsByPropValInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetArgumentsByPropValInst implements AssigningInstruction {
 	argumentsIndex: RegisterIndex;
 	lazyLoad: RegisterIndex;
 }
 
-export interface GetArgumentsLengthInst extends VMInstruction {
-	destination: RegisterIndex;
+export class GetArgumentsLengthInst implements AssigningInstruction {
 	lazyLoad: RegisterIndex;
 }
 
-export interface ReifyArgumentsInst extends VMInstruction {
+export class ReifyArgumentsInst implements VMInstruction {
 	lazyLoad: RegisterIndex;
 }
 
-export interface CreateRegExpInst extends VMInstruction {
-	destination: RegisterIndex;
-	pattern: string;
-	flags: string;
+export class CreateRegExpInst implements AssigningInstruction {
+	pattern: HermesString;
+	flags: HermesString;
 	regExpBytecodeIndex: number;
 }
 
-export interface SwitchImmInst extends VMInstruction {
+export class SwitchImmInst implements VMInstruction {
 	discriminant: RegisterIndex;
 	jumpTableOffset: number;
 	defaultJumpOffset: number;
@@ -385,121 +354,82 @@ export interface SwitchImmInst extends VMInstruction {
 	maxValue: number;
 }
 
-export interface StartGeneratorInst extends VMInstruction {}
+export class StartGeneratorInst implements VMInstruction {}
 
-export interface ResumeGeneratorInst extends VMInstruction {
+export class ResumeGeneratorInst implements VMInstruction {
 	value: RegisterIndex;
 	isReturn: RegisterIndex;
 }
 
-export interface CompleteGeneratorInst extends VMInstruction {}
+export class CompleteGeneratorInst implements VMInstruction {}
 
-export interface CreateGeneratorInst extends VMInstruction {
-	destination: RegisterIndex;
+export class CreateGeneratorInst implements AssigningInstruction {
 	environment: RegisterIndex;
 	functionIndex: number;
 }
 
-export interface IteratorBeginInst extends VMInstruction {
-	destination: RegisterIndex;
+export class IteratorBeginInst implements AssigningInstruction {
 	source: RegisterIndex;
 }
 
-export interface IteratorNextInst extends VMInstruction {
-	destination: RegisterIndex;
+export class IteratorNextInst implements AssigningInstruction {
 	iterator: RegisterIndex;
 	sourceOrNext: RegisterIndex;
 }
 
-export interface IteratorCloseInst extends VMInstruction {
+export class IteratorCloseInst implements VMInstruction {
 	iterator: RegisterIndex;
 	ignoreException: RegisterIndex;
 }
 
-export interface IteratorCloseInst extends VMInstruction {
-	iterator: RegisterIndex;
-	ignoreException: RegisterIndex;
-}
+export class JmpInst implements BranchInstruction {}
 
-export interface JumpingInstruction extends VMInstruction {
-	target: number;
-}
-
-export interface JmpInst extends VMInstruction {}
-
-export interface JmpTrueInst extends VMInstruction {
+export class JmpTrueInst implements BranchInstruction {
 	predicate: RegisterIndex;
 }
 
-export interface JmpFalseInst extends VMInstruction {
+export class JmpFalseInst implements BranchInstruction {
 	predicate: RegisterIndex;
 }
 
-export interface JmpUndefinedInst extends VMInstruction {
+export class JmpUndefinedInst implements BranchInstruction {
 	predicate: RegisterIndex;
 }
 
-export interface SaveGenerator extends VMInstruction {}
+export class SaveGenerator implements BranchInstruction {}
 
-export interface JumpingBinaryInstruction extends JumpingInstruction {
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
+export class JLess implements BranchBinaryInstruction {}
+export class JNotLess implements BranchBinaryInstruction {}
+export class JLessN implements BranchBinaryInstruction {}
+export class JNotLessN implements BranchBinaryInstruction {}
+export class JLessEqual implements BranchBinaryInstruction {}
+export class JNotLessEqual implements BranchBinaryInstruction {}
+export class JLessEqualN implements BranchBinaryInstruction {}
+export class JNotLessEqualN implements BranchBinaryInstruction {}
+export class JGreater implements BranchBinaryInstruction {}
+export class JNotGreater implements BranchBinaryInstruction {}
+export class JGreaterN implements BranchBinaryInstruction {}
+export class JNotGreaterN implements BranchBinaryInstruction {}
+export class JGreaterEqual implements BranchBinaryInstruction {}
+export class JNotGreaterEqual implements BranchBinaryInstruction {}
+export class JGreaterEqualN implements BranchBinaryInstruction {}
+export class JNotGreaterEqualN implements BranchBinaryInstruction {}
+export class JEqual implements BranchBinaryInstruction {}
+export class JNotEqual implements BranchBinaryInstruction {}
+export class JEqualN implements BranchBinaryInstruction {}
+export class JNotEqualN implements BranchBinaryInstruction {}
+export class JStrictEqual implements BranchBinaryInstruction {}
+export class JStrictNotEqual implements BranchBinaryInstruction {}
 
-export interface JLess extends JumpingBinaryInstruction {}
-export interface JNotLess extends JumpingBinaryInstruction {}
-export interface JLessN extends JumpingBinaryInstruction {}
-export interface JNotLessN extends JumpingBinaryInstruction {}
-export interface JLessEqual extends JumpingBinaryInstruction {}
-export interface JNotLessEqual extends JumpingBinaryInstruction {}
-export interface JLessEqualN extends JumpingBinaryInstruction {}
-export interface JNotLessEqualN extends JumpingBinaryInstruction {}
-export interface JGreater extends JumpingBinaryInstruction {}
-export interface JNotGreater extends JumpingBinaryInstruction {}
-export interface JGreaterN extends JumpingBinaryInstruction {}
-export interface JNotGreaterN extends JumpingBinaryInstruction {}
-export interface JGreaterEqual extends JumpingBinaryInstruction {}
-export interface JNotGreaterEqual extends JumpingBinaryInstruction {}
-export interface JGreaterEqualN extends JumpingBinaryInstruction {}
-export interface JNotGreaterEqualN extends JumpingBinaryInstruction {}
-export interface JEqual extends JumpingBinaryInstruction {}
-export interface JNotEqual extends JumpingBinaryInstruction {}
-export interface JEqualN extends JumpingBinaryInstruction {}
-export interface JNotEqualN extends JumpingBinaryInstruction {}
-export interface JStrictEqual extends JumpingBinaryInstruction {}
-export interface JStrictNotEqual extends JumpingBinaryInstruction {}
+export class Add32Inst implements WASMSpecificInstruction, BinaryOperationInst {}
 
-export interface WASMSpecificInstruction extends VMInstruction {}
+export class Sub32Inst implements WASMSpecificInstruction, BinaryOperationInst {}
 
-export interface Add32Inst extends WASMSpecificInstruction {
-	destination: RegisterIndex;
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
+export class Mul32Inst implements WASMSpecificInstruction, BinaryOperationInst {}
 
-export interface Sub32Inst extends WASMSpecificInstruction {
-	destination: RegisterIndex;
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
+export class Divi32Inst implements WASMSpecificInstruction, BinaryOperationInst {}
 
-export interface Mul32Inst extends WASMSpecificInstruction {
-	destination: RegisterIndex;
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
-
-export interface Divi32Inst extends WASMSpecificInstruction {
-	destination: RegisterIndex;
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
-
-export interface Divu32Inst extends WASMSpecificInstruction {
-	destination: RegisterIndex;
-	left: RegisterIndex;
-	right: RegisterIndex;
-}
+export class Divu32Inst implements WASMSpecificInstruction, BinaryOperationInst {}
 
 export interface Loadi8Inst extends WASMSpecificInstruction {
 	destination: RegisterIndex;

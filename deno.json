@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "lint": {
+    "files": {
+      "include": ["lib/"],
+      "exclude": ["lib/parser/HermesBytecode.js"]
+    },
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "files": {
+      "include": ["lib/"],
+      "exclude": ["lib/parser/HermesBytecode.js"]
+    },
+    "options": {
+      "useTabs": true,
+      "lineWidth": 80,
+      "indentWidth": 4,
+      "singleQuote": true,
+      "proseWrap": "preserve"
+    }
+  }
+}
