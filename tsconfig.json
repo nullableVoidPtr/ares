@@ -1,0 +1,7 @@
+{
+	"compilerOptions": {
+		"lib": ["ESNext"],
+		"target": "ES2022"
+	},
+	"exclude": ["./lib/parser/wasm"],
+}

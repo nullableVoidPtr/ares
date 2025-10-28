@@ -4,10 +4,10 @@
     "lib": ["deno.window"],
     "strict": true
   },
+  "exclude": ["lib/parser/wasm/"]
   "lint": {
     "files": {
       "include": ["lib/"],
-      "exclude": ["lib/parser/HermesBytecode.js"]
     },
     "rules": {
       "tags": ["recommended"]
@@ -16,7 +16,6 @@
   "fmt": {
     "files": {
       "include": ["lib/"],
-      "exclude": ["lib/parser/HermesBytecode.js"]
     },
     "options": {
       "useTabs": true,
@@ -25,5 +24,16 @@
       "singleQuote": true,
       "proseWrap": "preserve"
     }
+  },
+  "unstable": ["sloppy-imports"],
+  "imports": {
+    "@babel/types": "npm:@babel/types@^7.28.5",
+    "@babel/generator": "npm:@babel/generator@^7.28.5",
+    "@babel/traverse": "npm:@babel/traverse@^7.28.5",
+    "@types/babel__generator": "npm:@types/babel__generator@^7.27.0",
+    "@types/babel__traverse": "npm:@types/babel__traverse@^7.28.0",
+    "kaitai-struct": "npm:kaitai-struct@^0.11.0",
+    "module": "node:module",
+    "url": "node:url"
   }
 }

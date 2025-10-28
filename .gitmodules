@@ -1,0 +1,6 @@
+[submodule "lib/parser/wasm/emsdk"]
+	path = lib/parser/wasm/emsdk
+	url = https://github.com/emscripten-core/emsdk
+[submodule "lib/parser/wasm/kaitai_struct_cpp_stl_runtime"]
+	path = lib/parser/wasm/kaitai_struct_cpp_stl_runtime
+	url = https://github.com/kaitai-io/kaitai_struct_cpp_stl_runtime
