@@ -1,8 +1,7 @@
 import { VersionDelta } from '../VersionInfo.ts';
-import VNEXT from './69.ts';
 
 export default {
-	privateBuiltins: VNEXT.privateBuiltins.filter(
-		b => b != "exponentiationOperator",
-	),
+	privateBuiltins: {
+		exclude: ['exponentiationOperator']
+	},
 } satisfies VersionDelta;

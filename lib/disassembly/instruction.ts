@@ -1,4 +1,5 @@
 import { getStackOffset, NamedStackVariables } from '../hbcConsts/stackFrameLayout.ts';
+import { VersionInfo } from '../hbcConsts/VersionInfo.ts';
 import { Reg8, Reg32, UInt8, UInt16, UInt32, UInt32 as Imm32, Double, Int8 as Addr8, Int32 as Addr32, StringRef8, StringRef16, StringRef32, FunctionRef16, FunctionRef32, BigIntRef16, BigIntRef32 } from '../utils/DataViewStream.ts';
 
 function isType<T extends string>(o: unknown, type: T): o is { type: T } {
@@ -1122,7 +1123,7 @@ export const InstructionNormalisationMap = {
 
 export type Instruction = Instructions[keyof Instructions];
 
-export function createInstruction(mnemonic: string, operands: Operand[], functionLocalOffset: number, bytecodeVersion?: number, frameSize?: number): Instruction {
+export function createInstruction(mnemonic: string, operands: Operand[], functionLocalOffset: number, version?: VersionInfo, frameSize?: number): Instruction {
 	type ExpectedInstruction<T extends string> = Instructions[
 		T extends keyof typeof InstructionNormalisationMap ? typeof InstructionNormalisationMap[T]['instruction']
 		: T extends keyof Instructions ? T 
@@ -1312,13 +1313,13 @@ export function createInstruction(mnemonic: string, operands: Operand[], functio
 
 		case 'Call':
 		case 'Construct': {
-			if (typeof bytecodeVersion == 'undefined' || typeof frameSize == 'undefined') {
+			if (typeof version == 'undefined' || typeof frameSize == 'undefined') {
 				throw new Error();
 			}
 
 			const argumentCount = checkImmediate(operands[2]);
 			const args: Register[] = [];
-			const lastArg = frameSize + getStackOffset(bytecodeVersion, NamedStackVariables.ThisArg);
+			const lastArg = frameSize + getStackOffset(version, NamedStackVariables.ThisArg);
 			for (let i = lastArg; i > lastArg - argumentCount; i--) {
 				args.push({ type: 'register', index: i });
 			}

@@ -1,3 +1,5 @@
+import { VersionInfo } from './VersionInfo.ts';
+
 export enum NamedStackVariables {
 	FirstLocal,
 	Scratch,
@@ -15,16 +17,20 @@ export enum NamedStackVariables {
 	// CalleeExtraRegistersAtStart,
 };
 
-export function getStackOffset(bytecodeVersion: number, name: NamedStackVariables): number {
+export function getStackOffset(version: number | VersionInfo, name: NamedStackVariables): number {
+	if (typeof version != 'number') {
+		version = version.bytecodeVersion;
+	}
+
 	switch (name) {
 		case NamedStackVariables.FirstLocal:
-			if (bytecodeVersion >= 94) {
+			if (version >= 94) {
 				return 1;
 			} else {
 				return 2;
 			}
 		case NamedStackVariables.DebugEnvironment:
-			if (bytecodeVersion >= 94) {
+			if (version >= 94) {
 				return 0;
 			} else {
 				return 1;

@@ -2,7 +2,7 @@ import { createInstruction, RAW_OPERANDS } from '../disassembly/instruction.ts';
 import { VersionInfo } from '../hbcConsts/VersionInfo.ts';
 import { DataViewStream } from '../utils/DataViewStream.ts';
 
-export function disassemble(bytecode: ArrayBufferLike, version: VersionInfo, bytecodeVersion?: number, frameSize?: number) {
+export function disassemble(bytecode: ArrayBufferLike, version: VersionInfo, frameSize?: number) {
 	const io = new DataViewStream(bytecode);
 
 	const instructions = [];
@@ -17,7 +17,7 @@ export function disassemble(bytecode: ArrayBufferLike, version: VersionInfo, byt
 					instruction,
 					(legacyOperands[instruction] ?? RAW_OPERANDS[instruction]).map(r => r(io)),
 					functionLocalOffset,
-					bytecodeVersion,
+					version,
 					frameSize,
 				),
 			);

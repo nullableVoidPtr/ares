@@ -1,9 +1,8 @@
 import { VersionDelta } from '../VersionInfo.ts';
-import VNEXT from './86.ts';
 
 export default {
-	opcodeMap: VNEXT.opcodeMap.filter(
-		m => ![
+	opcodeMap: {
+		exclude: [
 			'Add32',
 			'Sub32',
 			'Mul32',
@@ -20,6 +19,6 @@ export default {
 			'Store32',
 			'Inc',
 			'Dec',
-		].includes(m),
-	),
+		],
+	},
 } satisfies VersionDelta;
