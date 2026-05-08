@@ -1,6 +1,6 @@
-import { Register, asRegister, StringRef, asStringRef, BigIntRef, asBigIntRef, FunctionRef, asFunctionRef } from '../disassembly/instruction.ts';
+import { Register, asRegister, StringRef, asStringRef, BigIntRef, asBigIntRef, FunctionRef, asFunctionRef } from '../hbc/disassembly/instruction.ts';
 
-export class DataViewStream {
+export class DataReader {
 	view: DataView
 	pos: number = 0;
 
@@ -82,24 +82,11 @@ export class DataViewStream {
 	}
 }
 
-export function Int8(io: DataViewStream) { return io.Int8(); }
-export function Int32(io: DataViewStream) { return io.Int32(); }
+export function Int8(io: DataReader) { return io.Int8(); }
+export function Int32(io: DataReader) { return io.Int32(); }
 
-export function UInt8(io: DataViewStream) { return io.UInt8(); }
-export function UInt16(io: DataViewStream) { return io.UInt16(); }
-export function UInt32(io: DataViewStream) { return io.UInt32(); }
+export function UInt8(io: DataReader) { return io.UInt8(); }
+export function UInt16(io: DataReader) { return io.UInt16(); }
+export function UInt32(io: DataReader) { return io.UInt32(); }
 
-export function Double(io: DataViewStream) { return io.Double(); }
-
-export function StringRef8(io: DataViewStream) { return io.StringRef8(); }
-export function StringRef16(io: DataViewStream) { return io.StringRef16(); }
-export function StringRef32(io: DataViewStream) { return io.StringRef32(); }
-
-export function BigIntRef16(io: DataViewStream) { return io.BigIntRef16(); }
-export function BigIntRef32(io: DataViewStream) { return io.BigIntRef32(); }
-
-export function FunctionRef16(io: DataViewStream) { return io.FunctionRef16(); }
-export function FunctionRef32(io: DataViewStream) { return io.FunctionRef32(); }
-
-export function Reg8(io: DataViewStream) { return io.Reg8(); }
-export function Reg32(io: DataViewStream) { return io.Reg32(); }
+export function Double(io: DataReader) { return io.Double(); }

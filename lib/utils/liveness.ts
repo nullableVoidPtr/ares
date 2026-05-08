@@ -1,6 +1,7 @@
-import { BlockAddr, FunctionExceptionHandler } from '../disassembly/function.ts';
-import { Instruction, Register, RegisterIndex } from '../disassembly/instruction.ts';
-import { exceptionHandlersByAddress } from './exceptions.ts';
+import { BlockAddr, FunctionExceptionHandler } from '../hbc/disassembly/function.ts';
+import { Instruction, Register, RegisterIndex } from '../hbc/disassembly/instruction.ts';
+import { exceptionHandlersByAddress } from '../hbc/utils/exceptions.ts';
+import { AddressMap } from './map.ts';
 import { setEquals } from './set.ts';
 
 export function analyseUseDefines<T extends Instruction>(instr: T): { defs: Record<string, Register>; uses: Record<string, Register | Register[]> } {
@@ -168,7 +169,7 @@ export function livenessAnalysis<T extends {
 }>(
 	func: T,
 ) {
-	const blockUsesDefs = new Map<BlockAddr, { uses: Set<RegisterIndex>; defs: Set<RegisterIndex> }>();
+	const blockUsesDefs = new AddressMap<{ uses: Set<RegisterIndex>; defs: Set<RegisterIndex> }>();
 
 	for (const [addr, block] of func.basicBlocks) {
 		const uses = new Set<RegisterIndex>();
@@ -196,8 +197,8 @@ export function livenessAnalysis<T extends {
 	}
 
 	// Initialize liveIn/liveOut maps
-	const liveIn = new Map<BlockAddr, Set<RegisterIndex>>();
-	const liveOut = new Map<BlockAddr, Set<RegisterIndex>>();
+	const liveIn = new AddressMap<Set<RegisterIndex>>();
+	const liveOut = new AddressMap<Set<RegisterIndex>>();
 
 	for (const addr of func.basicBlocks.keys()) {
 		liveIn.set(addr, new Set());
@@ -244,7 +245,7 @@ export function livenessAnalysis<T extends {
 	}
 
 	// Prepare block-level result structure
-	const blockLiveness = new Map<BlockAddr, BlockLiveness>();
+	const blockLiveness = new AddressMap<BlockLiveness>();
 	for (const [addr] of func.basicBlocks) {
 		const { uses, defs } = blockUsesDefs.get(addr)!;
 		blockLiveness.set(addr, {

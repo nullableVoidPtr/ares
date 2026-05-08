@@ -1,15 +1,17 @@
+import { AddressMap } from '../../utils/map.ts';
+import { AddressSet } from '../../utils/set.ts';
 import { BasicBlock, BlockAddr, FunctionExceptionHandler } from "./function.ts";
 import { Instruction } from "./instruction.ts";
 
 export function structureInstructions(code: Instruction[], exceptionHandlers?: FunctionExceptionHandler[]): {
-	basicBlocks: Map<BlockAddr, BasicBlock>;
-	trampolines: Map<BlockAddr, BlockAddr>;
+	basicBlocks: AddressMap<BasicBlock>;
+	trampolines: AddressMap<BlockAddr>;
 } {
 	exceptionHandlers ??= [];
 
-	const basicBlocks = new Map<number, BasicBlock>();
+	const basicBlocks = new AddressMap<BasicBlock>();
 	const starts: number[] = [code[0].functionLocalOffset];
-	const indexMap = new Map<number, number>();
+	const indexMap = new AddressMap<number>();
 	for (let i = 0; i < code.length; i++) {
 		const instruction = code[i];
 		const offset = instruction.functionLocalOffset;
@@ -65,7 +67,7 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 		}
 	}
 
-	const unvisited = new Set(code.map(({functionLocalOffset}) => functionLocalOffset));
+	const unvisited = new AddressSet(code.map(({functionLocalOffset}) => functionLocalOffset));
 	for (const start of starts) {
 		const block: BasicBlock = {
 			address: start,
@@ -193,7 +195,7 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 		throw new Error();
 	}
 
-	const unconditionalJmps = new Map<BlockAddr, BlockAddr>();
+	const unconditionalJmps = new AddressMap<BlockAddr>();
 	for (const [addr, block] of basicBlocks) {
 		if (block.instructions.length > 1) continue;
 
@@ -204,7 +206,7 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 		unconditionalJmps.set(addr, target);
 	}
 
-	const trampolines = new Map<BlockAddr, BlockAddr>();
+	const trampolines = new AddressMap<BlockAddr>();
 	for (const [src, target] of unconditionalJmps) {
 		let newTarget = unconditionalJmps.get(target);
 		if (newTarget == null) {
@@ -212,7 +214,7 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 			continue;
 		}
 
-		const visited = new Set<BlockAddr>([target, newTarget]);
+		const visited = new AddressSet([target, newTarget]);
 		while (unconditionalJmps.has(newTarget)) {
 			newTarget = unconditionalJmps.get(newTarget)!;
 			if (visited.has(newTarget)) throw new Error();

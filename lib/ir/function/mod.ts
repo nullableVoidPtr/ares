@@ -1,16 +1,20 @@
 import * as t from '@babel/types';
 import { SSAFunction, SSARegister, ssaRegisterEquals } from '../../ssa.ts';
-import { StringRef } from '../../disassembly/instruction.ts';
+import { StringRef } from '../../hbc/disassembly/instruction.ts';
 // @ts-types="npm:@types/babel__generator"
 import { default as _generate } from '@babel/generator';
 // @ts-types="npm:@types/babel__traverse"
 import { default as _traverse, NodePath } from '@babel/traverse';
 import { HBCFile } from '../../parser/file.ts';
-import { BlockAddr, FunctionExceptionHandler } from '../../disassembly/function.ts';
+import { BlockAddr, FunctionExceptionHandler } from '../../hbc/disassembly/function.ts';
 import { reduceSequence, reduceSimpleIf, reduceTryCatch } from './cfg.ts';
 import { LiftedAST, IRBlock, liftSSABlocktoIR, extractFunctionRef } from '../ast.ts';
 import { LiftError } from './../error.ts';
-import mapEachBlocks from '../../utils/mapEachBlock.ts';
+import { structureTry } from './except/structure.ts';
+import { AddressSet } from '../../utils/set.ts';
+import { AddressMap } from '../../utils/map.ts';
+import { AddressGraph } from '../../utils/graph.ts';
+import { HandlerGraph, HandlerRecord } from './except/mod.ts';
 
 const traverse = _traverse.default;
 
@@ -27,8 +31,7 @@ function extractRegisterAssign(decn: NodePath<t.VariableDeclaration>) {
 	return {
 		id,
 		init,
-	}
-
+	};
 }
 
 export class IRFunction {
@@ -36,17 +39,19 @@ export class IRFunction {
 	ssa: SSAFunction;
 	id: number;
 
-	exceptionHandlers: FunctionExceptionHandler[];
+	_exceptionHandlers: FunctionExceptionHandler[];
 
-	mergedBlocks: Map<BlockAddr, Set<BlockAddr>>;
+	mergedBlocks: AddressGraph;
 
 	isGenerator = false;
-	yieldingBlocks = new Map<BlockAddr, SSARegister>();
-	yieldEndBlocks = new Map<BlockAddr, { destination: SSARegister; continuation: BlockAddr; return: BlockAddr; }>();
-	// will be used later to structure any finally clauses
-	returnBlocks = new Map<BlockAddr, SSARegister>();
+	yieldingBlocks = new AddressMap<SSARegister>();
+	yieldEndBlocks = new AddressMap<{ destination: SSARegister; continuation: BlockAddr; return: BlockAddr; }>();
+	yieldRetBlocks = new AddressMap<SSARegister>();
+	returnBlocks = new AddressSet();
 
-	blocks = new Map<BlockAddr, IRBlock>();
+	blocks = new AddressMap<IRBlock>();
+
+	exceptions: HandlerGraph;
 
 	referencedFunctionIds = new Map<number, number>();
 
@@ -55,48 +60,55 @@ export class IRFunction {
 		this.ssa = ssa;
 		this.id = this.ssa.id;
 
-		this.exceptionHandlers = this.ssa.exceptionHandlers.map((exc) => ({...exc}));
+		this._exceptionHandlers = this.ssa.exceptionHandlers.map((exc) => ({...exc}));
+		this.exceptions = new HandlerGraph(this);
 
 		const { basicBlocks } = this.ssa;
-		this.mergedBlocks = mapEachBlocks(basicBlocks, () => new Set());
+		this.mergedBlocks = AddressGraph.fromBasicBlocks(basicBlocks);
 
 		const startBlock = basicBlocks.get(0)!;
 		if (startBlock.instructions[0].instruction === 'StartGenerator') {
 			this.isGenerator = true;
 		}
 
-		if (this.isGenerator) {
-			for (const [addr, block] of basicBlocks) {
-				if (block.ssaInstructions[0].instruction == 'ResumeGenerator') {
-					const destination = block.ssaInstructions[0].defs.destination;
-					const jmp = block.ssaInstructions[1];
-					if (jmp?.instruction != 'JmpTrue') throw new Error();
+		for (const [addr, block] of basicBlocks) {
+			if (this.isGenerator && block.ssaInstructions[0].instruction == 'ResumeGenerator') {
+				const destination = block.ssaInstructions[0].defs.destination;
+				const jmp = block.ssaInstructions[1];
+				if (jmp?.instruction != 'JmpTrue') throw new Error();
 
-					const returnAddress = block.consequentAddresses[1];
-					this.yieldEndBlocks.set(addr, {
-						destination,
-						continuation: block.consequentAddresses[0],
-						return: returnAddress,
-					});
+				const returnAddress = block.consequentAddresses[1];
+				this.yieldEndBlocks.set(addr, {
+					destination,
+					continuation: block.consequentAddresses[0],
+					return: returnAddress,
+				});
 
-					this.returnBlocks.set(returnAddress, destination);
-				} else {
-					const savePoints = block.ssaInstructions.reduce((acc, { instruction }, i) => {
-						if (instruction == 'SaveGenerator') acc.push(i);
-						return acc;
-					}, new Array<number>());
-					if (savePoints.length === 0) continue;
-					if (savePoints.length > 1) throw new Error();
-					
-					const retInst = block.ssaInstructions[savePoints[0] + 1]
-					if (retInst?.instruction != 'Ret') throw new Error();
-					this.yieldingBlocks.set(addr, retInst.uses.argument);
+				this.yieldRetBlocks.set(returnAddress, destination);
+				this.returnBlocks.add(returnAddress);
+			} else {
+				const retInst = block.ssaInstructions.at(-1);
+				if (retInst?.instruction != 'Ret') continue;
+
+				if (this.isGenerator) {
+					const prev = block.ssaInstructions.at(-2);
+					if (prev?.instruction == 'SaveGenerator') {
+						this.yieldingBlocks.set(addr, retInst.uses.argument);
+						continue;
+					} else if (prev?.instruction != 'CompleteGenerator') {
+						throw new LiftError('');
+					}
 				}
+
+				this.returnBlocks.add(addr);
 			}
 		}
 
+		// findFinallyBlocks(this);
+		// structureTry(this);
+
 		for (const [addr, block] of basicBlocks) {
-			if (this.yieldEndBlocks.has(addr) || this.returnBlocks.has(addr)) continue;
+			if (this.yieldEndBlocks.has(addr) || this.yieldRetBlocks.has(addr)) continue;
 
 			this.blocks.set(addr, liftSSABlocktoIR(this, block));
 		}
@@ -132,15 +144,13 @@ export class IRFunction {
 			changed = reduceSimpleIf(this) || changed;
 			changed = reduceTryCatch(this) || changed;
 		} while (changed);
-	
-		const wrappedEntry = t.file(t.program(<t.Statement[]>this.blocks.get(0)!.body)); 
-		
-		if (this.blocks.size === 1) {
-			// TODO: even on improperly structure ones, traverse on each block and use live-out analysis to avoid changing semantics
-			let changed = false;
-			do {
-				changed = false;
-				traverse(wrappedEntry, {
+
+		do {
+			changed = false;
+			for (const block of this.blocks.values()) {
+				const wrappedBody = t.file(t.program(<t.Statement[]>block.body));
+
+				traverse(wrappedBody, {
 					VariableDeclaration: {
 						exit(decn) {
 							const assign = extractRegisterAssign(decn);
@@ -149,6 +159,9 @@ export class IRFunction {
 							const { id, init } = assign;
 							const binding = decn.scope.getBinding(id.node.name);
 							if (!binding?.constant) return;
+							// TODO: remove need for binding
+							// at AST lift, populate map of SSA regs to { valueNode, refCount }
+							// and replace by traversing at ReferencedIdentifier
 							if (!(init.isPure() || init.node.extra?.isConst)) {
 								if (binding.referencePaths.length === 0) {
 									decn.replaceWith(init);
@@ -220,10 +233,12 @@ export class IRFunction {
 						}
 					}
 				});
-				traverse.cache.clearScope();
-			} while (changed);
-
-			traverse(wrappedEntry, {
+			}
+		} while (changed);
+		
+		for (const block of this.blocks.values()) {
+			const wrappedBody = t.file(t.program(<t.Statement[]>block.body)); 
+			traverse(wrappedBody, {
 				CallExpression(call) {
 					if (!t.isV8IntrinsicIdentifier(call.node.callee, { name: 'getFunctionById' })) return;
 
@@ -236,7 +251,9 @@ export class IRFunction {
 					);
 				},
 			}, undefined, this);
+		}
 
+		if (this.blocks.size === 1) {
 			const last = <t.Statement>this.blocks.get(0)!.body.at(-1);
 			if (t.isReturnStatement(last) && !last.argument) {
 				this.blocks.get(0)!.body.pop();
@@ -248,13 +265,13 @@ export class IRFunction {
 	get paramCount() { return this.ssa.paramCount; }
 
 	predecessorsOf(target: BlockAddr) {
-		const predecessors = new Set<BlockAddr>();
+		const predecessors = new AddressSet();
 		for (const [addr, block] of this.blocks) {
 			if (block.consequentAddresses.includes(target)) {
 				predecessors.add(addr);
 			}
 		}
-		for (const { tryStart, catchOffset } of this.exceptionHandlers) {
+		for (const { tryStart, catchOffset } of this._exceptionHandlers) {
 			if (catchOffset === target) {
 				predecessors.add(tryStart);
 			}
@@ -267,7 +284,7 @@ export class IRFunction {
 		this.blocks.delete(childAddr);
 		this.mergedBlocks.set(parentAddr,
 			this.mergedBlocks.get(parentAddr)!.union(
-				this.mergedBlocks.get(childAddr) ?? new Set(),
+				this.mergedBlocks.get(childAddr) ?? new AddressSet(),
 			)
 		);
 		this.mergedBlocks.delete(childAddr);

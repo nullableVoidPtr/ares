@@ -1,4 +1,4 @@
-import { BlockAddr, Function, FunctionExceptionHandler } from '../disassembly/function.ts';
+import { BlockAddr, Function, FunctionExceptionHandler } from '../../hbc/disassembly/function.ts';
 
 export function exceptionHandlersByAddress(address: BlockAddr, exceptionHandlers: FunctionExceptionHandler[]): FunctionExceptionHandler[] {
 	return exceptionHandlers.filter(

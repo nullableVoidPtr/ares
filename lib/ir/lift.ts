@@ -9,13 +9,14 @@ import { extractFunctionRef, LiftedExtra } from './ast.ts';
 import { LiftError } from './error.ts';
 import { IRFunction } from './function/mod.ts';
 import { assert } from 'node:console';
+import { FunctionId } from '../hbc/disassembly/instruction.ts';
 
 const generate = _generate.default;
 const traverse = _traverse.default;
 
 export function liftFile(file: HBCFile) {
-	const functions = new Map<number, IRFunction>();
-	const soleFunctionReferences = new Map<number, Set<number>>();
+	const functions = new Map<FunctionId, IRFunction>();
+	const soleFunctionReferences = new Map<FunctionId, Set<FunctionId>>();
 	for (let i = 0; i < file.functions.length; i++) {
 		const ssa = new SSAFunction(file.functions[i]);
 		functions.set(i, new IRFunction(file, ssa));
@@ -29,7 +30,7 @@ export function liftFile(file: HBCFile) {
 		}
 	}
 
-	const safelyNestedFunctions = new Set<number>();
+	const safelyNestedFunctions = new Set<FunctionId>();
 	for (const [child, parent] of soleFunctionReferences) {
 		if (parent.size !== 1) continue;
 		safelyNestedFunctions.add(child);

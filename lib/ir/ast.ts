@@ -2,17 +2,17 @@ import { assert } from 'node:console';
 import * as t from '@babel/types';
 // @ts-types="npm:@types/babel__generator"
 import { default as _generate } from '@babel/generator';
-import { BigIntRef, FunctionId, FunctionRef, HermesEmpty, isStringRef, StringRef } from '../disassembly/instruction.ts';
+import { BigIntRef, FunctionId, FunctionRef, HermesEmpty, isStringRef, StringRef } from '../hbc/disassembly/instruction.ts';
 import { SSABasicBlock, SSAInstruction, SSARegister } from '../ssa.ts';
 import { IRFunction } from './function/mod.ts';
-import { BlockAddr } from '../disassembly/function.ts';
+import { BlockAddr } from '../hbc/disassembly/function.ts';
 import { LiftError } from './error.ts';
 
 const generate = _generate.default;
 
 export type LiftedExtra = Partial<{
 	parentFunctionId: number;
-	bytecodeAddress: number;
+	address: number;
 
 	isBuiltin: boolean;
 	isConst: boolean;
@@ -117,7 +117,7 @@ export function liftSSABlocktoIR(func: IRFunction, block: SSABasicBlock): IRBloc
 			continue;
 		}
 
-		const extra: LiftedExtra = { parentFunctionId: func.id, bytecodeAddress: instr.functionLocalOffset };
+		const extra: LiftedExtra = { parentFunctionId: func.id, address: instr.functionLocalOffset };
 		switch (instr.instruction) {
 			case 'GetGlobalObject': {
 				const g = t.identifier('global');

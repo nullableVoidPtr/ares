@@ -1,10 +1,10 @@
-import { BasicBlock, Function, BlockAddr } from "./disassembly/function.ts";
-import { asRegister, Instruction, isRegister, Register, RegisterIndex } from "./disassembly/instruction.ts";
+import { BasicBlock, Function, BlockAddr } from "./hbc/disassembly/function.ts";
+import { asRegister, Instruction, isRegister, Register, RegisterIndex } from "./hbc/disassembly/instruction.ts";
 import DominanceGraph from './utils/DominanceGraph.ts';
-import { exceptionHandlersByAddress } from './utils/exceptions.ts';
+import { exceptionHandlersByAddress } from './hbc/utils/exceptions.ts';
 import { analyseUseDefines, livenessAnalysis } from './utils/liveness.ts';
-import mapEachBlocks from './utils/mapEachBlock.ts';
-import { setEquals } from './utils/set.ts';
+import { AddressMap, MapWithDefault } from './utils/map.ts';
+import { AddressSet } from './utils/set.ts';
 
 export type RegisterVersion = number;
 export interface SSARegister extends Register {
@@ -33,7 +33,7 @@ export type InstructionWithSSA<T> = T extends Instruction ? T & {
 export interface PhiInst {
 	instruction: 'Phi';
 	destination: SSARegister;
-	sources: Map<BlockAddr, SSARegister>;
+	sources: AddressMap<SSARegister>;
 };
 
 export type SSAInstruction = InstructionWithSSA<Instruction> | PhiInst;
@@ -45,7 +45,7 @@ export interface SSABasicBlock extends BasicBlock {
 function splitProtectedBlocks(func: Function) {
 	const liveness = livenessAnalysis(func);
 	// https://raw.githubusercontent.com/LLVM-but-worse/maple-ir/master/docs/maple-ir.pdf
-	const localsMap = mapEachBlocks(func.basicBlocks, () => new Set<RegisterIndex>());
+	const localsMap = AddressMap.mapEachBlock(func.basicBlocks, () => new Set<RegisterIndex>());
 	for (const [addr, block] of func.basicBlocks) {
 		let newLocals = localsMap.get(addr)!
 		for (const { catchOffset } of exceptionHandlersByAddress(block.address, func.exceptionHandlers)) {
@@ -89,7 +89,7 @@ function splitProtectedBlocks(func: Function) {
 
 export class SSAFunction {
 	_func: Function;
-	basicBlocks: Map<BlockAddr, SSABasicBlock>;
+	basicBlocks: AddressMap<SSABasicBlock>;
 
 	constructor(func: Function) {
 		this._func = func;
@@ -101,22 +101,21 @@ export class SSAFunction {
 		const liveness = livenessAnalysis(func);
 
 		// TODO: use liveness instead?
-		const varDefs = new Map<RegisterIndex, Set<BlockAddr>>();
+		const varDefs = new MapWithDefault<RegisterIndex, AddressSet>();
 		for (const block of basicBlocks.values()) {
 			for (const instr of block.instructions) {
 				for (const assigned of Object.values(analyseUseDefines(instr).defs)) {
-					if (!varDefs.has(assigned.index)) {
-						varDefs.set(assigned.index, new Set());
-					}
-
-					varDefs.get(assigned.index)!.add(block.address);
+					varDefs.getWithDefault(
+						assigned.index,
+						() => new AddressSet(),
+					)!.add(block.address);
 				}
 			}
 		}
 
 		const g = new DominanceGraph(this._func);
 
-		const phiNodes = mapEachBlocks(basicBlocks, () => new Set<RegisterIndex>());
+		const phiNodes = AddressMap.mapEachBlock(basicBlocks, () => new Set<RegisterIndex>());
 		for (const [r, defBlocks] of varDefs.entries()) {
 			const work = [...defBlocks];
 			while (work.length) {
@@ -133,9 +132,9 @@ export class SSAFunction {
 
 		// TODO: handle catch_addr phis and split at definitions of each input??
 
-		const ssaBasicBlocks = new Map<BlockAddr, SSABasicBlock>();
-		const phiSourcesBySuccessor = mapEachBlocks(basicBlocks, () => new Map<RegisterIndex, Map<BlockAddr, SSARegister>>());
-		const phiDests = mapEachBlocks(basicBlocks, () => new Map<RegisterIndex, SSARegister>());
+		const ssaBasicBlocks = new AddressMap<SSABasicBlock>();
+		const phiSourcesBySuccessor = AddressMap.mapEachBlock(basicBlocks, () => new MapWithDefault<RegisterIndex, AddressMap<SSARegister>>());
+		const phiDests = AddressMap.mapEachBlock(basicBlocks, () => new Map<RegisterIndex, SSARegister>());
 
 		const renameBlock = (addr: BlockAddr) => {
 			const block = basicBlocks.get(addr)!;
@@ -164,10 +163,7 @@ export class SSAFunction {
 			for (const s of g.successorsOf(addr)) {
 				const successorPhiSources = phiSourcesBySuccessor.get(s)!;
 				for (const phi of phiNodes.get(s) ?? []) {
-					let sourceMap = successorPhiSources.get(phi);
-					if (!sourceMap) {
-						successorPhiSources.set(phi, sourceMap = new Map());
-					}
+					const sourceMap = successorPhiSources.getWithDefault(phi, () => new AddressMap());
 
 					if (sourceMap.has(addr)) {
 						throw new Error();
@@ -207,10 +203,7 @@ export class SSAFunction {
 				const sources = phiSourcesBySuccessor.get(addr)!.get(destination.index)!;
 
 				// TODO: deal with predecessors that do not assign to phi'd registers
-				if (!setEquals(
-					new Set(g.predecessorsOf(addr)),
-					new Set(sources.keys()),
-				)) {
+				if (!g.predecessorsOf(addr).equals(new AddressSet(sources.keys()))) {
 					console.log(addr);
 					console.log(g.predecessorsOf(addr));
 					console.log(sources.keys())
@@ -242,7 +235,7 @@ export class SSAFunction {
 	get trampolines() { return this._func.trampolines; }
 
 	#versionCounters = new Map<RegisterIndex, RegisterVersion>();
-	#stacks = new Map<RegisterIndex, SSARegister[]>();
+	#stacks = new MapWithDefault<RegisterIndex, SSARegister[]>();
 
 	#nextVersionOf(reg: Register | RegisterIndex): SSARegister {
 		if (isRegister(reg)) reg = reg.index;
@@ -251,9 +244,8 @@ export class SSAFunction {
 		const newVersion = cur + 1;
 		this.#versionCounters.set(reg, newVersion);
 
-		const versioned = { ...asRegister(reg), version: newVersion }; 
-		if (!this.#stacks.has(reg)) this.#stacks.set(reg, []);
-		this.#stacks.get(reg)!.push(versioned);
+		const versioned = { ...asRegister(reg), version: newVersion };
+		this.#stacks.getWithDefault(reg, () => [])!.push(versioned);
 		return versioned;
 	}
 
@@ -269,8 +261,7 @@ export class SSAFunction {
 		if (isRegister(reg)) reg = reg.index;
 
 		const ssa = this.#nextVersionOf(reg);
-		if (!this.#stacks.has(reg)) this.#stacks.set(reg, []);
-		this.#stacks.get(reg)!.push(ssa);
+		this.#stacks.getWithDefault(reg, () => [])!.push(ssa);
 
 		return ssa;
 	}

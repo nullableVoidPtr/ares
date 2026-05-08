@@ -1,6 +1,6 @@
 import { identifier, memberExpression, MemberExpression } from '@babel/types';
 import { Operand, RawMnemonic } from '../disassembly/instruction.ts';
-import { DataViewStream } from '../utils/DataViewStream.ts';
+import { DataReader } from '../../utils/DataReader.ts';
 import VERSION_DELTAS from './versions/mod.ts';
 
 type ArrayDelta<T> = {
@@ -12,7 +12,7 @@ type ArrayDelta<T> = {
 
 export interface VersionDelta {
 	opcodeMap?: ArrayDelta<RawMnemonic>;
-	legacyOperands?: Partial<Record<RawMnemonic, ((io: DataViewStream) => Operand)[]>>;
+	legacyOperands?: Partial<Record<RawMnemonic, ((io: DataReader) => Operand)[]>>;
 
 	/*
 	Regular_expression('User defined','^(// )?(BUILTIN_METHOD|PRIVATE_BUILTIN|JS_BUILTIN)\\((.+)\\)$',true,true,false,false,false,false,'List matches')

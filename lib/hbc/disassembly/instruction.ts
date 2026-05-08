@@ -1,6 +1,7 @@
-import { getStackOffset, NamedStackVariables } from '../hbcConsts/stackFrameLayout.ts';
-import { VersionInfo } from '../hbcConsts/VersionInfo.ts';
-import { Reg8, Reg32, UInt8, UInt16, UInt32, UInt32 as Imm32, Double, Int8 as Addr8, Int32 as Addr32, StringRef8, StringRef16, StringRef32, FunctionRef16, FunctionRef32, BigIntRef16, BigIntRef32 } from '../utils/DataViewStream.ts';
+import { getStackOffset, NamedStackVariables } from '../data/stackFrameLayout.ts';
+import { VersionInfo } from '../data/VersionInfo.ts';
+import { UInt8, UInt16, UInt32, Double } from '../../utils/DataReader.ts';
+import { Reg8, Reg32, Imm32, Addr8, Addr32, StringRef8, StringRef16, StringRef32, FunctionRef16, FunctionRef32, BigIntRef16, BigIntRef32 } from '../reader.ts';
 
 function isType<T extends string>(o: unknown, type: T): o is { type: T } {
 	if (typeof o != 'object' || o === null) return false;

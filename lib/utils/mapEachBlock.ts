@@ -1,4 +1,4 @@
-import { BlockAddr } from '../disassembly/function.ts';
+import { BlockAddr } from '../hbc/disassembly/function.ts';
 
 export default function mapEachBlocks<B, R>(basicBlocks: Map<BlockAddr, B>, callback: () => R): Map<BlockAddr, R> {
 	const map = new Map<BlockAddr, R>();

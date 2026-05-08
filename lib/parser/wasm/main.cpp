@@ -9,15 +9,20 @@
 
 using namespace emscripten;
 
+struct Uint8Array : public ::emscripten::val {
+    explicit Uint8Array(val const &other) : val(other) {};
+    Uint8Array() : val(val::global("Uint8Array").new_()) {};
+};
+
 struct kinded_string_t {
     uint32_t kind;
     bool isUTF16;
-    val value;
+    Uint8Array value;
 
     kinded_string_t(uint32_t kind, bool isUTF16, const std::string& value) : kind(kind), isUTF16(isUTF16) {
-        this->value = val::global("Uint8Array").new_(
+        this->value = Uint8Array(val::global("Uint8Array").new_(
             val(memory_view<uint8_t>(value.size(), reinterpret_cast<const uint8_t*>(value.data())))
-        );
+        ));
     };
 };
 
@@ -42,14 +47,14 @@ struct function_t {
     uint32_t prohibitInvoke;
     std::vector<exception_handler_t> excHandlers;
 
-    val bytecode;
+    Uint8Array bytecode = Uint8Array(val::global("Uint8Array").new_());
 
     function_t() {}; 
     function_t(hermes_bytecode_t::small_func_header_t* header) {
         auto bytecode = header->bytecode();
-        this->bytecode = val::global("Uint8Array").new_(
+        this->bytecode = Uint8Array(val::global("Uint8Array").new_(
             val(memory_view<uint8_t>(bytecode.size(), reinterpret_cast<const uint8_t*>(bytecode.data())))
-        );
+        ));
 
         auto info = header->info();
 
@@ -144,6 +149,8 @@ public:
 };
 
 EMSCRIPTEN_BINDINGS(hermes_bytecode) {
+    register_type<Uint8Array>("Uint8Array");
+
 	class_<kinded_string_t>("KindedString")
 	.property("kind", &kinded_string_t::kind)
 	.property("isUTF16", &kinded_string_t::isUTF16)

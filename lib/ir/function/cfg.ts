@@ -1,12 +1,15 @@
 import * as t from '@babel/types';
-import { BlockAddr } from '../../disassembly/function.ts';
+import { BlockAddr } from '../../hbc/disassembly/function.ts';
 import { IRFunction } from './mod.ts';
 import { LiftedAST } from '../ast.ts';
-import { areExceptionHandlersEqual, areExceptionHandlersParent, exceptionHandlersByAddress } from '../../utils/exceptions.ts';
+import { areExceptionHandlersEqual, areExceptionHandlersParent, exceptionHandlersByAddress } from '../../hbc/utils/exceptions.ts';
+import { AddressSet } from '../../utils/set.ts';
+import { AddressMap } from '../../utils/map.ts';
+import { AddressGraph } from '../../utils/graph.ts';
 
 export function reduceSequence(func: IRFunction) {
-	const parents = new Map<BlockAddr, BlockAddr>();
-	const children = new Map<BlockAddr, BlockAddr>();
+	const parents = new AddressMap<BlockAddr>();
+	const children = new AddressMap<BlockAddr>();
 	for (const [addr, block] of func.blocks) {
 		if (block.branch) continue;
 
@@ -15,7 +18,9 @@ export function reduceSequence(func: IRFunction) {
 
 		const [childAddr] = successors;
 		if (addr === childAddr) continue;
-		if (!areExceptionHandlersEqual(addr, childAddr, func.exceptionHandlers)) continue;
+		if (!areExceptionHandlersEqual(addr, childAddr, func._exceptionHandlers)) {
+			if (func.ssa.basicBlocks.get(childAddr)?.consequentAddresses?.length !== 0) continue;
+		}
 
 		if (func.predecessorsOf(childAddr).size !== 1) continue;
 
@@ -27,7 +32,7 @@ export function reduceSequence(func: IRFunction) {
 		return false;
 	}
 
-	const starts = new Set<BlockAddr>();
+	const starts = new AddressSet();
 	for (const parent of children.keys()) {
 		if (!parents.has(parent)) starts.add(parent);
 	}
@@ -57,7 +62,7 @@ export function reduceSequence(func: IRFunction) {
 }
 
 export function reduceSimpleIf(func: IRFunction) {
-	const simpleIfs = new Map<BlockAddr, {
+	const simpleIfs = new AddressMap<{
 		test: LiftedAST<t.Expression>;
 		consequent: BlockAddr;
 		alternate: BlockAddr | null;
@@ -125,7 +130,7 @@ export function reduceSimpleIf(func: IRFunction) {
 			alternate = null;
 			successor = right;
 		} else if (rightConsequent || rightEarlyReturn) {
-			ifTest = t.unaryExpression('!', <t.Expression>block.branch);
+			ifTest = block.branch;
 
 			consequent = right;
 			alternate = null;
@@ -134,11 +139,11 @@ export function reduceSimpleIf(func: IRFunction) {
 			continue;
 		}
 
-		const headerCatches = exceptionHandlersByAddress(addr, func.exceptionHandlers);
-		if (!areExceptionHandlersParent(headerCatches, consequent, func.exceptionHandlers)) {
-			continue;
-		} else if (alternate && !areExceptionHandlersParent(headerCatches, alternate, func.exceptionHandlers)) {
-			continue;
+		const headerCatches = exceptionHandlersByAddress(addr, func._exceptionHandlers);
+		if (!areExceptionHandlersParent(headerCatches, consequent, func._exceptionHandlers)) {
+			if (func.blocks.get(consequent)!.consequentAddresses.length !== 0) continue;
+		} else if (alternate && !areExceptionHandlersParent(headerCatches, alternate, func._exceptionHandlers)) {
+			if (func.blocks.get(alternate)!.consequentAddresses.length !== 0) continue;
 		}
 
 		simpleIfs.set(addr, {
@@ -183,13 +188,10 @@ export function reduceSimpleIf(func: IRFunction) {
 }
 
 export function reduceTryCatch(func: IRFunction) {
-	const catchMap = new Map<BlockAddr, Set<BlockAddr>>();
+	const catchMap = new AddressGraph();
 	for (const addr of func.blocks.keys()) {
-		for (const { catchOffset } of exceptionHandlersByAddress(addr, func.exceptionHandlers)) {
-			if (!catchMap.has(catchOffset)) {
-				catchMap.set(catchOffset, new Set());
-			}
-			catchMap.get(catchOffset)!.add(addr);
+		for (const { catchOffset } of exceptionHandlersByAddress(addr, func._exceptionHandlers)) {
+			catchMap.addEdge(catchOffset, addr);
 		}
 	}
 
@@ -208,7 +210,7 @@ export function reduceTryCatch(func: IRFunction) {
 		if (body.consequentAddresses.length !== 1) continue;
 		if (catcher.consequentAddresses[0] !== body.consequentAddresses[0]) continue;
 
-		if (!areExceptionHandlersParent(body.address, catchAddr, func.exceptionHandlers)) continue;
+		if (!areExceptionHandlersParent(body.address, catchAddr, func._exceptionHandlers)) continue;
 
 		const catchBody = t.blockStatement(<t.Statement[]>catcher.body.slice());
 
@@ -234,7 +236,7 @@ export function reduceTryCatch(func: IRFunction) {
 			)
 		];
 
-		func.exceptionHandlers = func.exceptionHandlers.filter(({catchOffset}) => catchOffset !== catchAddr);
+		func._exceptionHandlers = func._exceptionHandlers.filter(({catchOffset}) => catchOffset !== catchAddr);
 
 		func.markMergedBlocks(body.address, catchAddr);
 

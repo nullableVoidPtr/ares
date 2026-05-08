@@ -1,5 +1,5 @@
 import { VersionDelta } from '../VersionInfo.ts';
-import { Reg8 } from '../../utils/DataViewStream.ts';
+import { Reg8 } from '../../reader.ts';
 
 export default {
 	legacyOperands: {

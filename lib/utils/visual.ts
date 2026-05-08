@@ -1,8 +1,11 @@
 import { SSAFunction, SSARegister } from '../ssa.ts';
-import { BlockAddr } from '../disassembly/function.ts';
-import { isStringRef } from '../disassembly/instruction.ts';
+import { BlockAddr } from '../hbc/disassembly/function.ts';
+import { isStringRef } from '../hbc/disassembly/instruction.ts';
 import { HBCFile } from '../parser/file.ts';
-import { exceptionHandlersByAddress } from './exceptions.ts';
+import { exceptionHandlersByAddress } from '../hbc/utils/exceptions.ts';
+import { AddressSet } from './set.ts';
+import { AddressMap } from './map.ts';
+import { AddressGraph } from './graph.ts';
 
 function r(reg: SSARegister) {
 	return `r${reg.index}.${reg.version}`;
@@ -46,11 +49,11 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 
 	type Cluster = {
 		nodes: string[];
-		children: Map<BlockAddr, Cluster>;
-		catchHandlers: Set<BlockAddr>;
+		children: AddressMap<Cluster>;
+		catchHandlers: AddressSet;
 	}
-	const clusters = new Map<BlockAddr, Cluster>();
-	const nestedClusters = new Map<BlockAddr, Set<BlockAddr>>();
+	const clusters = new AddressMap<Cluster>();
+	const nestedClusters = new AddressGraph();
 	for (const [addr, block] of func.basicBlocks) {
 		const text = block.ssaInstructions.map(instr => {
 			if (instr.instruction == 'Phi') {
@@ -85,16 +88,12 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 			graph += node;
 		} else {
 			for (const { tryStart, catchOffset } of exceptionHandlers) {
-				if (!clusters.has(tryStart)) {
-					clusters.set(tryStart, { nodes: [], children: new Map(), catchHandlers: new Set() });
-				}
+				clusters.getWithDefault(
+					tryStart,
+					() => ({ nodes: [], children: new AddressMap(), catchHandlers: new AddressSet() })
+				).catchHandlers.add(catchOffset);
 
-				clusters.get(tryStart)!.catchHandlers.add(catchOffset);
-
-				if (!nestedClusters.has(tryStart)) {
-					nestedClusters.set(tryStart, new Set());
-				}
-
+				nestedClusters.getWithDefault(tryStart, () => new AddressSet());
 			}
 			const sorted = exceptionHandlers.toSorted(
 				({tryStart: leftStart, tryEnd: leftEnd}, {tryStart: rightStart, tryEnd: rightEnd}) =>
@@ -113,11 +112,11 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 		}
 	}
 
-	const toDelete = new Set<BlockAddr>();
+	const toDelete = new AddressSet();
 	for (const [tryStart, children] of nestedClusters) {
 		if (children.size === 0) continue;
 
-		clusters.get(tryStart)!.children = new Map([...children].flatMap(c => {
+		clusters.get(tryStart)!.children = new AddressMap([...children].flatMap(c => {
 			if (c === tryStart) return [];
 			const child = clusters.get(c)!
 			toDelete.add(c);
