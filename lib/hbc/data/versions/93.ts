@@ -8,6 +8,6 @@ export default {
 		],
 	},
 	privateBuiltins: {
-		exclude: ['getOriginalNativeErrorConstructor']
+		exclude: ['getOriginalNativeErrorConstructor'],
 	},
 } satisfies VersionDelta;

@@ -3,7 +3,7 @@ import { VersionDelta } from '../VersionInfo.ts';
 export default {
 	publicBuiltins: {
 		exclude: [
-			["Date", "now"],
+			['Date', 'now'],
 		],
 	},
 } satisfies VersionDelta;

@@ -1,15 +1,33 @@
 import { AddressMap } from '../../utils/map.ts';
 import { AddressSet } from '../../utils/set.ts';
-import { BasicBlock, BlockAddr, FunctionExceptionHandler } from "./function.ts";
-import { Instruction } from "./instruction.ts";
+import { BasicBlock, BlockAddr, FunctionExceptionHandler } from './function.ts';
+import { Instruction } from './instruction.ts';
 
-export function structureInstructions(code: Instruction[], exceptionHandlers?: FunctionExceptionHandler[]): {
+const RELATIONAL_NOT_JUMPS: Partial<Record<Instruction['instruction'], true>> =
+	{
+		JNotLess: true,
+		JNotLessEqual: true,
+		JNotGreater: true,
+		JNotGreaterEqual: true,
+	};
+
+export function structureInstructions(
+	code: Instruction[],
+	exceptionHandlers?: FunctionExceptionHandler[],
+): {
 	basicBlocks: AddressMap<BasicBlock>;
 	trampolines: AddressMap<BlockAddr>;
 } {
 	exceptionHandlers ??= [];
 
 	const basicBlocks = new AddressMap<BasicBlock>();
+	if (code.length == 0) {
+		return {
+			basicBlocks,
+			trampolines: new AddressMap<BlockAddr>(),
+		};
+	}
+
 	const starts: number[] = [code[0].functionLocalOffset];
 	const indexMap = new AddressMap<number>();
 	for (let i = 0; i < code.length; i++) {
@@ -27,6 +45,9 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 			case 'JmpTrue':
 			case 'JmpFalse':
 			case 'JmpUndefined':
+			case 'JmpTypeOfIs':
+			case 'JmpBuiltinIs':
+			case 'JmpBuiltinIsNot':
 			case 'JLess':
 			case 'JNotLess':
 			case 'JLessEqual':
@@ -45,17 +66,35 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 			case 'SaveGenerator':
 				starts.push(offset + instruction.relativeTarget);
 				break;
-			
+
 			// case 'TryGetById':
 			// case 'TryPutById':
 			case 'ThrowIfEmpty':
 			case 'ThrowIfUndefined':
 				starts.push(code[i + 1].functionLocalOffset);
 				break;
+			case 'UIntSwitchImm':
+				starts.push(
+					instruction.functionLocalOffset +
+						instruction.defaultJumpOffset,
+				);
+				for (const target of new Set(instruction.relativeTargets)) {
+					starts.push(instruction.functionLocalOffset + target);
+				}
+				break;
+			case 'StringSwitchImm':
+				starts.push(
+					instruction.functionLocalOffset +
+						instruction.defaultJumpOffset,
+				);
+				for (const target of new Set(instruction.relativeTargets)) {
+					starts.push(instruction.functionLocalOffset + target);
+				}
+				break;
 		}
 	}
 
-	for (const { tryStart, tryEnd, catchOffset} of exceptionHandlers) {
+	for (const { tryStart, tryEnd, catchOffset } of exceptionHandlers) {
 		if (!starts.includes(tryStart)) {
 			starts.push(tryStart);
 		}
@@ -67,7 +106,9 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 		}
 	}
 
-	const unvisited = new AddressSet(code.map(({functionLocalOffset}) => functionLocalOffset));
+	const unvisited = new AddressSet(
+		code.map(({ functionLocalOffset }) => functionLocalOffset),
+	);
 	for (const start of starts) {
 		const block: BasicBlock = {
 			address: start,
@@ -78,9 +119,16 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 		};
 
 		let generatorContinuation: number | undefined = undefined;
-		basicBlockLoop: for (let i = indexMap.get(start)!; i < code.length; i++) {
+		basicBlockLoop: for (
+			let i = indexMap.get(start)!;
+			i < code.length;
+			i++
+		) {
 			const instruction = code[i];
-			if (instruction.functionLocalOffset !== start && starts.includes(instruction.functionLocalOffset)) {
+			if (
+				instruction.functionLocalOffset !== start &&
+				starts.includes(instruction.functionLocalOffset)
+			) {
 				if (block.consequentAddresses.length > 0) {
 					throw new Error();
 				}
@@ -94,8 +142,13 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 			unvisited.delete(instruction.functionLocalOffset);
 
 			if (instruction.instruction == 'SaveGenerator') {
-				if (typeof generatorContinuation != 'undefined') throw new Error('expected only one SaveGenerator in a basic block');
-				generatorContinuation = instruction.functionLocalOffset + instruction.relativeTarget;
+				if (typeof generatorContinuation != 'undefined') {
+					throw new Error(
+						'expected only one SaveGenerator in a basic block',
+					);
+				}
+				generatorContinuation = instruction.functionLocalOffset +
+					instruction.relativeTarget;
 			}
 
 			switch (instruction.instruction) {
@@ -110,31 +163,59 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 					break basicBlockLoop;
 				case 'Jmp':
 					block.consequentAddresses = [
-						instruction.functionLocalOffset + instruction.relativeTarget,
+						instruction.functionLocalOffset +
+						instruction.relativeTarget,
 					];
 					break basicBlockLoop;
 				case 'JmpTrue':
 				case 'JmpFalse':
 					block.consequentAddresses = [
-						code[i+1].functionLocalOffset,
-						instruction.functionLocalOffset + instruction.relativeTarget
+						code[i + 1].functionLocalOffset,
+						instruction.functionLocalOffset +
+						instruction.relativeTarget,
 					];
 					block.predicate = {
 						not: instruction.instruction == 'JmpFalse',
 						predicate: instruction.predicate,
-					}
+					};
+					break basicBlockLoop;
+				case 'JmpBuiltinIs':
+				case 'JmpBuiltinIsNot':
+					block.consequentAddresses = [
+						code[i + 1].functionLocalOffset,
+						instruction.functionLocalOffset +
+						instruction.relativeTarget,
+					];
+					block.predicate = {
+						not: instruction.instruction == 'JmpBuiltinIsNot',
+						predicate: instruction.predicate,
+					};
+					break basicBlockLoop;
+				case 'JmpTypeOfIs':
+					block.consequentAddresses = [
+						code[i + 1].functionLocalOffset,
+						instruction.functionLocalOffset +
+						instruction.relativeTarget,
+					];
+					block.predicate = {
+						not: false,
+						value: instruction.value,
+						operation: 'typeof-is',
+						typeIndex: instruction.typeIndex,
+					};
 					break basicBlockLoop;
 				case 'JmpUndefined':
 					block.consequentAddresses = [
-						code[i+1].functionLocalOffset,
-						instruction.functionLocalOffset + instruction.relativeTarget
+						code[i + 1].functionLocalOffset,
+						instruction.functionLocalOffset +
+						instruction.relativeTarget,
 					];
 					block.predicate = {
 						not: false,
 						left: instruction.predicate,
 						operation: '==',
 						right: undefined,
-					}
+					};
 					break basicBlockLoop;
 				case 'JLess':
 				case 'JNotLess':
@@ -148,12 +229,16 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 				case 'JNotEqual':
 				case 'JStrictEqual':
 				case 'JStrictNotEqual':
-					block.consequentAddresses = [
-						code[i+1].functionLocalOffset,
-						instruction.functionLocalOffset + instruction.relativeTarget
-					];
+					const fallthroughAddress = code[i + 1].functionLocalOffset;
+					const jumpAddress = instruction.functionLocalOffset +
+						instruction.relativeTarget;
+					const relationalNot =
+						RELATIONAL_NOT_JUMPS[instruction.instruction] === true;
+					block.consequentAddresses = relationalNot
+						? [jumpAddress, fallthroughAddress]
+						: [fallthroughAddress, jumpAddress];
 					block.predicate = {
-						not: {
+						not: !relationalNot && {
 							'JLess': false,
 							'JNotLess': true,
 							'JLessEqual': false,
@@ -183,7 +268,25 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 							'JStrictNotEqual': '===',
 						} as const)[instruction.instruction],
 						right: instruction.right,
-					}
+					};
+					break basicBlockLoop;
+				case 'UIntSwitchImm':
+					block.consequentAddresses = [
+						instruction.functionLocalOffset +
+						instruction.defaultJumpOffset,
+						...instruction.relativeTargets.map((target) =>
+							instruction.functionLocalOffset + target
+						),
+					];
+					break basicBlockLoop;
+				case 'StringSwitchImm':
+					block.consequentAddresses = [
+						instruction.functionLocalOffset +
+						instruction.defaultJumpOffset,
+						...instruction.relativeTargets.map((target) =>
+							instruction.functionLocalOffset + target
+						),
+					];
 					break basicBlockLoop;
 			}
 		}
@@ -197,6 +300,7 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 
 	const unconditionalJmps = new AddressMap<BlockAddr>();
 	for (const [addr, block] of basicBlocks) {
+		if (block.instructions.length == 0) continue;
 		if (block.instructions.length > 1) continue;
 
 		const jmp = block.instructions[0];
@@ -224,11 +328,12 @@ export function structureInstructions(code: Instruction[], exceptionHandlers?: F
 	}
 
 	for (const predecessor of basicBlocks.values()) {
-		predecessor.consequentAddresses = predecessor.consequentAddresses.map((consequent) => {
-			return trampolines.get(consequent) ?? consequent
-		});
+		predecessor.consequentAddresses = predecessor.consequentAddresses.map(
+			(consequent) => {
+				return trampolines.get(consequent) ?? consequent;
+			},
+		);
 	}
-
 
 	for (const addr of trampolines.keys()) {
 		basicBlocks.delete(addr);

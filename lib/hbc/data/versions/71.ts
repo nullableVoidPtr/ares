@@ -2,6 +2,6 @@ import { VersionDelta } from '../VersionInfo.ts';
 
 export default {
 	privateBuiltins: {
-		exclude: ['getEpilogues']
+		exclude: ['getEpilogues'],
 	},
 } satisfies VersionDelta;

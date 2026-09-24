@@ -1,4 +1,4 @@
-import { Register, Instruction } from "./instruction.js";
+import { Instruction, Register } from './instruction.ts';
 
 export interface FunctionExceptionHandler {
 	tryStart: number;
@@ -19,14 +19,14 @@ export interface BasicBlock {
 
 		left: Register;
 
-		operation: (
-			'<' | '<=' |
-			'>' | '>=' |
-			'==' |
-			'==='
-		);
+		operation: '<' | '<=' | '>' | '>=' | '==' | '===';
 
 		right: Register | undefined;
+	} | {
+		not: boolean;
+		value: Register;
+		operation: 'typeof-is';
+		typeIndex: number;
 	} | {
 		discriminant: Register;
 		minValue: number;
@@ -45,17 +45,32 @@ enum ProhibitInvoke {
 	ProhibitNone = 2,
 }
 
+export enum FunctionKind {
+	NormalFunction = 0,
+	GeneratorFunction = 1,
+	AsyncFunction = 2,
+}
+
 export interface Function {
 	id: number;
 	offset: number;
+	/** Encoded bytecode bytes; used as a scheduling/memory weight. */
+	bytecodeLength?: number;
 	name?: string;
 	paramCount: number;
 	frameSize: number;
 	envSize: number;
+	loopDepth: number;
+	numberRegCount: number;
+	nonPtrRegCount: number;
 	highestReadCacheIndex: number;
 	highestWriteCacheIndex: number;
+	readCacheSize: number;
+	writeCacheSize: number;
+	privateNameCacheSize: number;
 	strict: boolean;
 	prohibitInvoke: ProhibitInvoke;
+	functionKind: FunctionKind;
 
 	exceptionHandlers: FunctionExceptionHandler[];
 

@@ -1,157 +1,12 @@
-import { BlockAddr, FunctionExceptionHandler } from '../hbc/disassembly/function.ts';
-import { Instruction, Register, RegisterIndex } from '../hbc/disassembly/instruction.ts';
+import {
+	BlockAddr,
+	FunctionExceptionHandler,
+} from '../hbc/disassembly/function.ts';
+import { Instruction, RegisterIndex } from '../hbc/disassembly/instruction.ts';
 import { exceptionHandlersByAddress } from '../hbc/utils/exceptions.ts';
 import { AddressMap } from './map.ts';
 import { setEquals } from './set.ts';
-
-export function analyseUseDefines<T extends Instruction>(instr: T): { defs: Record<string, Register>; uses: Record<string, Register | Register[]> } {
-	const defs: Record<string, Register> = {};
-	const uses: Record<string, Register | Register[]> = {};
-
-	if ("destination" in instr) defs.destination = instr.destination;
-	if ("argument" in instr) uses.argument = instr.argument;
-	if ("left" in instr) uses.left = instr.left;
-	if ("right" in instr) uses.right = instr.right;
-	if ("predicate" in instr) uses.predicate = instr.predicate;
-
-	switch (instr.instruction) {
-		case 'NewObjectWithParent':
-			uses.parent = instr.parent;
-			break;
-
-		case 'Mov':
-		case 'ThrowIfEmpty':
-		case 'IteratorBegin':
-			uses.source = instr.source;
-			break;
-
-		case 'StoreToEnvironment':
-		case 'StoreNPToEnvironment':
-			uses.value = instr.value;
-		/* falls through */
-		case 'LoadFromEnvironment':
-		case 'CreateClosure':
-		case 'CreateGeneratorClosure':
-		case 'CreateAsyncClosure':
-		case 'CreateGenerator':
-			uses.environment = instr.environment;
-			break;
-
-		case 'PutByVal':
-		case 'PutOwnByVal':
-			uses.property = instr.property;
-		/* falls through */
-		case 'PutById':
-		case 'TryPutById':
-		case 'PutNewOwnById':
-		case 'PutNewOwnNEById':
-		case 'PutOwnByIndex':
-			uses.value = instr.value;
-		/* falls through */
-		case 'TryGetById':
-		case 'GetById':
-		case 'DelById':
-			uses.object = instr.object;
-			break;
-
-		case 'PutOwnGetterSetterByVal':
-			uses.getter = instr.getter;
-			uses.setter = instr.setter;
-		/* falls through */
-		case 'DelByVal':
-		case 'GetByVal':
-			uses.object = instr.object;
-			uses.property = instr.property;
-			break;
-
-		case 'GetPNameList':
-		case 'GetNextPName':
-			uses.object = instr.object;
-			uses.index = instr.index;
-			uses.propertyListSize = instr.propertyListSize;
-			break;
-
-		case 'Call':
-		case 'Construct': {
-			uses.closure = instr.closure;
-			uses.arguments = instr.arguments.slice();
-			break;
-		}
-
-		case 'Ret':
-			uses.argument = instr.argument;
-			break;
-
-		case 'DirectEval':
-			uses.code = instr.code;
-			break;
-
-		case 'Throw':
-			uses.exception = instr.exception;
-			break;
-
-		case 'CreateThis':
-			uses.prototype = instr.prototype;
-			uses.constructorRef = instr.constructorRef;
-			break;
-
-		case 'SelectObject':
-			uses.thisObject = instr.thisObject;
-			uses.constructorReturnValue = instr.constructorReturnValue;
-			break;
-
-		case 'GetArgumentsByPropVal':
-			uses.argumentsIndex = instr.argumentsIndex;
-		/* falls through */
-		case 'GetArgumentsLength':
-		case 'ReifyArguments':
-			defs.lazyLoad = instr.lazyLoad;
-			uses.lazyLoad = instr.lazyLoad;
-			break;
-
-		case 'SwitchImm':
-			uses.discriminant = instr.discriminant;
-			break;
-
-		case 'ResumeGenerator':
-			uses.isReturn = instr.isReturn;
-			break;
-
-		case 'IteratorNext':
-			uses.iterator = instr.iterator;
-			uses.sourceOrNext = instr.sourceOrNext;
-			break;
-
-		case 'IteratorClose':
-			uses.iterator = instr.iterator;
-			uses.ignoreException = instr.ignoreException;
-			break;
-
-		case 'Store8':
-		case 'Store16':
-		case 'Store32':
-			uses.value = instr.value;
-		/* falls through */
-		case 'Loadi8':
-		case 'Loadu8':
-		case 'Loadi16':
-		case 'Loadu16':
-		case 'Loadi32':
-		case 'Loadu32':
-			uses.heap = instr.heap;
-			uses.offset = instr.offset;
-			break;
-	}
-	return { defs, uses };
-}
-
-/** Result types for the analyser */
-export interface BlockLiveness {
-	liveIn: Set<RegisterIndex>;   // set of register ids
-	liveOut: Set<RegisterIndex>;
-	uses: Set<RegisterIndex>;     // block-level uses (before any def in block)
-	defs: Set<RegisterIndex>;     // block-level defs (first def of register in block)
-}
+import { analyseUseDefines } from './useDefines.ts';
 
 export interface InstrLiveness {
 	liveIn: Set<RegisterIndex>;
@@ -160,16 +15,60 @@ export interface InstrLiveness {
 	defs: Set<RegisterIndex>;
 }
 
-export function livenessAnalysis<T extends {
+/** Result types for the analyser */
+export interface BlockLiveness {
+	liveIn: Set<RegisterIndex>; // set of register ids
+	liveOut: Set<RegisterIndex>;
+	uses: Set<RegisterIndex>; // block-level uses (before any def in block)
+	defs: Set<RegisterIndex>; // block-level defs (first def of register in block)
+}
+
+export interface LivenessInfo {
+	blockLiveness: AddressMap<BlockLiveness>;
+	instrLiveness: Map<BlockAddr, InstrLiveness[]>;
+}
+
+export interface LivenessInput {
 	basicBlocks: Map<BlockAddr, {
 		consequentAddresses: BlockAddr[];
 		instructions: Instruction[];
 	}>;
 	exceptionHandlers: FunctionExceptionHandler[];
-}>(
+}
+
+/**
+ * Liveness for one `SSAFunction`'s disassembly, computed once.
+ *
+ * Reduction asked for it repeatedly -- `reduceOrChain`, `reduceSimpleIf` and
+ * consumed-value analysis each recomputed it, 145 times across the 28
+ * functions of the v96 main sample -- and every answer was the same:
+ * `SSAFunction` freezes the disassembly once it has split protected blocks and
+ * renamed registers, and the reducers rewrite the lifted AST rather than the
+ * bytecode. Callers only read the sets.
+ *
+ * Keyed on the `SSAFunction` rather than on the disassembly it wraps, so the
+ * per-instruction sets die with the function that wanted them instead of
+ * living as long as the parsed bundle. `SSAFunction`'s own two calls stay on
+ * `livenessAnalysis`, because those run while it is still rewriting.
+ */
+const ssaLiveness = new WeakMap<object, LivenessInfo>();
+
+export function ssaLivenessAnalysis(
+	ssa: { _func: LivenessInput },
+): LivenessInfo {
+	const cached = ssaLiveness.get(ssa);
+	if (cached) return cached;
+	const computed = livenessAnalysis(ssa._func);
+	ssaLiveness.set(ssa, computed);
+	return computed;
+}
+
+export function livenessAnalysis<T extends LivenessInput>(
 	func: T,
-) {
-	const blockUsesDefs = new AddressMap<{ uses: Set<RegisterIndex>; defs: Set<RegisterIndex> }>();
+): LivenessInfo {
+	const blockUsesDefs = new AddressMap<
+		{ uses: Set<RegisterIndex>; defs: Set<RegisterIndex> }
+	>();
 
 	for (const [addr, block] of func.basicBlocks) {
 		const uses = new Set<RegisterIndex>();
@@ -218,7 +117,13 @@ export function livenessAnalysis<T extends {
 
 			// compute newOut = union of in[succ]
 			const newOut = new Set<RegisterIndex>();
-			for (const succAddr of [...block.consequentAddresses, ...exceptionHandlersByAddress(addr, func.exceptionHandlers).map(({ catchOffset }) => catchOffset)]) {
+			for (
+				const succAddr of [
+					...block.consequentAddresses,
+					...exceptionHandlersByAddress(addr, func.exceptionHandlers)
+						.map(({ catchOffset }) => catchOffset),
+				]
+			) {
 				const succIn = liveIn.get(succAddr);
 				if (succIn) {
 					for (const r of succIn) newOut.add(r);
@@ -227,7 +132,9 @@ export function livenessAnalysis<T extends {
 			}
 
 			// compute newIn = use[B] U (newOut \ def[B])
-			const { uses: blockUses, defs: blockDefs } = blockUsesDefs.get(addr)!;
+			const { uses: blockUses, defs: blockDefs } = blockUsesDefs.get(
+				addr,
+			)!;
 			const newIn = new Set<RegisterIndex>(blockUses); // start with uses
 
 			for (const r of newOut) {
@@ -270,8 +177,12 @@ export function livenessAnalysis<T extends {
 			const instr = block.instructions[i];
 			const { defs: dmap, uses: umap } = analyseUseDefines(instr);
 
-			const defs = new Set<RegisterIndex>(Object.values(dmap).map(({ index }) => index));
-			const uses = new Set<RegisterIndex>(Object.values(umap).flatMap(r => r).map(({ index }) => index));
+			const defs = new Set<RegisterIndex>(
+				Object.values(dmap).map(({ index }) => index),
+			);
+			const uses = new Set<RegisterIndex>(
+				Object.values(umap).flatMap((r) => r).map(({ index }) => index),
+			);
 
 			// liveOut(instr) = nextLive
 			const liveOutInstr = new Set<RegisterIndex>(nextLive);

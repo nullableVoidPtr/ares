@@ -12,11 +12,11 @@ function r(reg: SSARegister) {
 }
 
 function blockName(addr: BlockAddr) {
-	return `block_${addr.toString().toUpperCase()}`
+	return `block_${addr.toString().toUpperCase()}`;
 }
 
 function regionName(addr: BlockAddr) {
-	return `cluster_try_${addr.toString().toUpperCase()}`
+	return `cluster_try_${addr.toString().toUpperCase()}`;
 }
 
 export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
@@ -28,8 +28,8 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 		'rankdir=TB;',
 		'ordering=out;',
 		'compound=true;',
-	].map(a => `\t${a}\n`).join('');
-	
+	].map((a) => `\t${a}\n`).join('');
+
 	/*
 	for (const [addr, block] of func.ssaBasicBlocks) {
 		const text = block.ssaInstructions.map(instr => {
@@ -51,29 +51,45 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 		nodes: string[];
 		children: AddressMap<Cluster>;
 		catchHandlers: AddressSet;
-	}
+	};
 	const clusters = new AddressMap<Cluster>();
 	const nestedClusters = new AddressGraph();
 	for (const [addr, block] of func.basicBlocks) {
-		const text = block.ssaInstructions.map(instr => {
+		const text = block.ssaInstructions.map((instr) => {
 			if (instr.instruction == 'Phi') {
-				return instr.instruction + ' ' + r(instr.destination) + ' ' + instr.sources.values().map(r);
+				return instr.instruction + ' ' + r(instr.destination) + ' ' +
+					instr.sources.values().map(r);
 			}
 			return instr.instruction + ' ' + [
-				...[...Object.entries(instr.defs), ...Object.entries(instr.uses)].map(([name, reg]) => {
+				...[
+					...Object.entries(instr.defs),
+					...Object.entries(instr.uses),
+				].map(([name, reg]) => {
 					if (Array.isArray(reg)) {
 						return name + ': [' + reg.map(r) + ']';
 					}
 					return name + ': ' + r(reg);
 				}),
 				...Object.entries(instr).flatMap(([key, value]) => {
-					if (['instruction', 'defs', 'uses', 'functionLocalOffset', 'type', 'length'].includes(key)) return [];
+					if (
+						[
+							'instruction',
+							'defs',
+							'uses',
+							'functionLocalOffset',
+							'type',
+							'length',
+						].includes(key)
+					) return [];
 					if (key in instr.defs || key in instr.uses) return [];
 
 					let repr = value.toString();
 					if (file) {
 						if (isStringRef(value)) {
-							repr = `"${file.getString(value.stringTableIndex).replaceAll('"', '\"')}"`
+							repr = `"${
+								file.getString(value.stringTableIndex)
+									.replaceAll('"', '"')
+							}"`;
 						}
 					}
 
@@ -81,23 +97,34 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 				}),
 			].join(', ');
 		}).join('\\l');
-		const node = `\t${blockName(addr)} [label="${text.replaceAll('"', '\\"')}"];\n`;
+		const node = `\t${blockName(addr)} [label="${
+			text.replaceAll('"', '\\"')
+		}"];\n`;
 
-		const exceptionHandlers = exceptionHandlersByAddress(block.address, func.exceptionHandlers);
+		const exceptionHandlers = exceptionHandlersByAddress(
+			block.address,
+			func.exceptionHandlers,
+		);
 		if (exceptionHandlers.length === 0) {
 			graph += node;
 		} else {
 			for (const { tryStart, catchOffset } of exceptionHandlers) {
 				clusters.getWithDefault(
 					tryStart,
-					() => ({ nodes: [], children: new AddressMap(), catchHandlers: new AddressSet() })
+					() => ({
+						nodes: [],
+						children: new AddressMap(),
+						catchHandlers: new AddressSet(),
+					}),
 				).catchHandlers.add(catchOffset);
 
 				nestedClusters.getWithDefault(tryStart, () => new AddressSet());
 			}
 			const sorted = exceptionHandlers.toSorted(
-				({tryStart: leftStart, tryEnd: leftEnd}, {tryStart: rightStart, tryEnd: rightEnd}) =>
-					(rightEnd - rightStart) - (leftEnd - leftStart)
+				(
+					{ tryStart: leftStart, tryEnd: leftEnd },
+					{ tryStart: rightStart, tryEnd: rightEnd },
+				) => (rightEnd - rightStart) - (leftEnd - leftStart),
 			);
 
 			for (let i = 1; i < sorted.length; i++) {
@@ -107,7 +134,7 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 			}
 
 			const { tryStart: surroundingTry } = sorted.at(-1)!;
-			
+
 			clusters.get(surroundingTry)!.nodes.push(node);
 		}
 	}
@@ -116,13 +143,15 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 	for (const [tryStart, children] of nestedClusters) {
 		if (children.size === 0) continue;
 
-		clusters.get(tryStart)!.children = new AddressMap([...children].flatMap(c => {
-			if (c === tryStart) return [];
-			const child = clusters.get(c)!
-			toDelete.add(c);
+		clusters.get(tryStart)!.children = new AddressMap(
+			[...children].flatMap((c) => {
+				if (c === tryStart) return [];
+				const child = clusters.get(c)!;
+				toDelete.add(c);
 
-			return [[c, child]];
-		}));
+				return [[c, child]];
+			}),
+		);
 	}
 
 	for (const c of toDelete) {
@@ -149,7 +178,11 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 		graph += '\t'.repeat(level) + `}`;
 
 		for (const catchHandler of cluster.catchHandlers) {
-			catchEdges.push(`${firstNode} -> ${blockName(catchHandler)}[ltail=${regionName(start)}];`);
+			catchEdges.push(
+				`${firstNode} -> ${blockName(catchHandler)}[ltail=${
+					regionName(start)
+				}];`,
+			);
 		}
 
 		if (!firstNode) {
@@ -167,7 +200,7 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 
 	for (const [addr, block] of func.basicBlocks) {
 		graph += [
-			block.consequentAddresses.map(succ => {
+			block.consequentAddresses.map((succ) => {
 				return `\t${blockName(addr)} -> ${blockName(succ)};\n`;
 			}).join(''),
 			/*
@@ -181,6 +214,6 @@ export default function visualiseSSA(func: SSAFunction, file?: HBCFile) {
 	graph += '\n';
 	graph += catchEdges.join('\n') + '\n';
 
-	graph += '}'
+	graph += '}';
 	return graph;
 }

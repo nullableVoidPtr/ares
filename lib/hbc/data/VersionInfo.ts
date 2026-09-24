@@ -1,18 +1,14 @@
-import { identifier, memberExpression, MemberExpression } from '@babel/types';
-import { Operand, RawMnemonic } from '../disassembly/instruction.ts';
+import { identifier, MemberExpression, memberExpression } from '@babel/types';
+import type { Operand, RawMnemonic } from '../disassembly/instruction.ts';
 import { DataReader } from '../../utils/DataReader.ts';
 import VERSION_DELTAS from './versions/mod.ts';
-
-type ArrayDelta<T> = {
-	exclude?: T[];
-	prepend?: T[];
-	append?: T[];
-	insertAfter?: [T, T];
-} | T[];
+import { applyArrayDelta, ArrayDelta } from './arrayDelta.ts';
 
 export interface VersionDelta {
 	opcodeMap?: ArrayDelta<RawMnemonic>;
-	legacyOperands?: Partial<Record<RawMnemonic, ((io: DataReader) => Operand)[]>>;
+	legacyOperands?: Partial<
+		Record<RawMnemonic, ((io: DataReader) => Operand)[]>
+	>;
 
 	/*
 	Regular_expression('User defined','^(// )?(BUILTIN_METHOD|PRIVATE_BUILTIN|JS_BUILTIN)\\((.+)\\)$',true,true,false,false,false,false,'List matches')
@@ -28,13 +24,24 @@ export interface VersionDelta {
 export interface VersionInfo {
 	bytecodeVersion: number;
 	opcodeMap: RawMnemonic[];
-	legacyOperands: Partial<Record<RawMnemonic, ((io: DataViewStream) => Operand)[]>>;
+	legacyOperands: Partial<
+		Record<RawMnemonic, ((io: DataReader) => Operand)[]>
+	>;
 
 	builtins: MemberExpression[];
 }
 
+function sameBuiltin(
+	left: readonly [string, string],
+	right: readonly [string, string],
+): boolean {
+	return left[0] === right[0] && left[1] === right[1];
+}
+
 export function getVersionInfo(bytecodeVersion: number): VersionInfo {
-	const versions = Array.from(VERSION_DELTAS.keys());
+	const versions = Array.from(VERSION_DELTAS.keys()).toSorted((a, b) =>
+		a - b
+	);
 	let nearestVersion: number;
 	const oldestSupportedVersion = versions[0];
 	const latestSupportedVersion = versions[versions.length - 1];
@@ -42,10 +49,14 @@ export function getVersionInfo(bytecodeVersion: number): VersionInfo {
 		nearestVersion = oldestSupportedVersion;
 	} else if (bytecodeVersion >= latestSupportedVersion) {
 		nearestVersion = latestSupportedVersion;
+	} else if (versions.includes(bytecodeVersion)) {
+		nearestVersion = bytecodeVersion;
 	} else {
-		const nearestIndex = versions.findLastIndex(k => k < bytecodeVersion);
-		if (typeof nearestIndex == 'undefined') throw new Error();
-		nearestVersion = versions[nearestIndex + 1];
+		const nearestIndex = versions.findLastIndex((k) => k < bytecodeVersion);
+		if (nearestIndex === -1) {
+			throw new Error(`No supported version before ${bytecodeVersion}`);
+		}
+		nearestVersion = versions[nearestIndex];
 	}
 
 	let opcodeMap: RawMnemonic[] | undefined;
@@ -56,107 +67,21 @@ export function getVersionInfo(bytecodeVersion: number): VersionInfo {
 	for (let i = versions.length - 1; versions[i] >= nearestVersion; i--) {
 		const delta = VERSION_DELTAS.get(versions[i])!;
 
-		if (delta.opcodeMap) {
-			if (Array.isArray(delta.opcodeMap)) {
-				opcodeMap = delta.opcodeMap;
-			} else if (opcodeMap && delta.opcodeMap) {
-				const { exclude, prepend, append, insertAfter } = delta.opcodeMap;
-				if (exclude) {
-					opcodeMap = opcodeMap.filter(o => !exclude.includes(o))
-				}
-				if (prepend) {
-					opcodeMap.unshift(...prepend);
-				}
-				if (append) {
-					opcodeMap.push(...append);
-				}
-				for (const [after, value] of insertAfter ?? []) {
-					const index = opcodeMap.indexOf(<RawMnemonic>after);
-					if (index === -1) continue;
-
-					opcodeMap.splice(index + 1, 0, <RawMnemonic>value);
-				}
-			}
-		}
+		opcodeMap = applyArrayDelta(opcodeMap, delta.opcodeMap);
 		legacyOperands = {
 			...legacyOperands,
 			...delta.legacyOperands,
-		}
-
-		if (delta.publicBuiltins) {
-			if (Array.isArray(delta.publicBuiltins)) {
-				publicBuiltins = delta.publicBuiltins;
-			} else if (publicBuiltins && delta.publicBuiltins) {
-				const { exclude, prepend, append, insertAfter } = delta.publicBuiltins;
-				if (exclude) {
-					publicBuiltins = publicBuiltins.filter(
-						([o, p]) => !exclude.some(([oo, op]) => oo == o && p == op)
-					)
-				}
-				if (prepend) {
-					publicBuiltins.unshift(...prepend);
-				}
-				if (append) {
-					publicBuiltins.push(...append);
-				}
-				for (const [[aftero, afterp], [o, p]] of insertAfter ?? []) {
-					const index = publicBuiltins.findIndex(([o, p]) => o == aftero && p == afterp);
-					if (index === -1) continue;
-
-					publicBuiltins.splice(index + 1, 0, [o, p]);
-				}
-			}
-		}
-
-		if (delta.privateBuiltins) {
-			if (Array.isArray(delta.privateBuiltins)) {
-				privateBuiltins = delta.privateBuiltins;
-			} else if (privateBuiltins && delta.privateBuiltins) {
-				const { exclude, prepend, append, insertAfter } = delta.privateBuiltins;
-				if (exclude) {
-					privateBuiltins = privateBuiltins.filter(
-						b => !exclude.includes(b)
-					)
-				}
-				if (prepend) {
-					privateBuiltins.unshift(...prepend);
-				}
-				if (append) {
-					privateBuiltins.push(...append);
-				}
-				for (const [after, value] of insertAfter ?? []) {
-					const index = privateBuiltins.indexOf(after);
-					if (index === -1) continue;
-
-					privateBuiltins.splice(index + 1, 0, value);
-				}
-			}
-		}
-
-		if (delta.jsBuiltins) {
-			if (Array.isArray(delta.jsBuiltins)) {
-				jsBuiltins = delta.jsBuiltins;
-			} else if (jsBuiltins && delta.jsBuiltins) {
-				const { exclude, prepend, append, insertAfter } = delta.jsBuiltins;
-				if (exclude) {
-					jsBuiltins = jsBuiltins.filter(
-						b => !exclude.includes(b)
-					)
-				}
-				if (prepend) {
-					jsBuiltins.unshift(...prepend);
-				}
-				if (append) {
-					jsBuiltins.push(...append);
-				}
-				for (const [after, value] of insertAfter ?? []) {
-					const index = jsBuiltins.indexOf(after);
-					if (index === -1) continue;
-
-					jsBuiltins.splice(index + 1, 0, value);
-				}
-			}
-		}
+		};
+		publicBuiltins = applyArrayDelta(
+			publicBuiltins,
+			delta.publicBuiltins,
+			sameBuiltin,
+		);
+		privateBuiltins = applyArrayDelta(
+			privateBuiltins,
+			delta.privateBuiltins,
+		);
+		jsBuiltins = applyArrayDelta(jsBuiltins, delta.jsBuiltins);
 	}
 
 	if (!opcodeMap || !publicBuiltins || !privateBuiltins || !jsBuiltins) {
@@ -168,7 +93,6 @@ export function getVersionInfo(bytecodeVersion: number): VersionInfo {
 		builtins.push(memberExpression(
 			identifier(object),
 			identifier(property),
-			false,
 			false,
 		));
 	}
@@ -189,6 +113,6 @@ export function getVersionInfo(bytecodeVersion: number): VersionInfo {
 		bytecodeVersion,
 		opcodeMap,
 		legacyOperands,
-		builtins, 
+		builtins,
 	};
 }

@@ -2,6 +2,6 @@ import { VersionDelta } from '../VersionInfo.ts';
 
 export default {
 	privateBuiltins: {
-		exclude: ['exponentiationOperator']
+		exclude: ['exponentiationOperator'],
 	},
 } satisfies VersionDelta;

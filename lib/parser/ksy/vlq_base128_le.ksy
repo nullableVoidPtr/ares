@@ -92,6 +92,12 @@ types:
           more, which is not supported).
     instances:
       interm_value:
+        # LOCAL FIX: every operand is widened to u8 explicitly. Written as the
+        # upstream `(prev_interm_value + value * multiplier).as<u8>`, KSC 0.12's
+        # Rust target infers the addition as i32 and narrows the product to it,
+        # so any value that does not fit in 32 bits wraps -- Hermes' NO_REG
+        # (`UINT32_MAX`) came back as -1. The casts below keep it all in u64.
+        #
         # We intentionally use addition (`+`) and multiplication (`*`), not
         # bitwise OR (`|`) and left shift (`<<`), in order to get better
         # precision in JavaScript, especially with respect to the Web IDE. Using
@@ -109,7 +115,7 @@ types:
         #
         # Full 64-bit integer support in JavaScript is only possible via the
         # `BigInt` type: https://github.com/kaitai-io/kaitai_struct/issues/183
-        value: (prev_interm_value + value * multiplier).as<u8>
+        value: (prev_interm_value.as<u8> + (value.as<u8> * multiplier.as<u8>).as<u8>).as<u8>
 instances:
   len:
     value: groups.size

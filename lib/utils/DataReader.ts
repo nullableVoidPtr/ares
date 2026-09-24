@@ -1,11 +1,28 @@
-import { Register, asRegister, StringRef, asStringRef, BigIntRef, asBigIntRef, FunctionRef, asFunctionRef } from '../hbc/disassembly/instruction.ts';
+import {
+	asBigIntRef,
+	asFunctionRef,
+	asRegister,
+	asStringRef,
+	BigIntRef,
+	FunctionRef,
+	Register,
+	StringRef,
+} from '../hbc/disassembly/instruction.ts';
 
 export class DataReader {
-	view: DataView
+	view: DataView;
 	pos: number = 0;
 
-	constructor(data: ArrayBufferLike) {
-		this.view = new DataView(data);
+	constructor(data: ArrayBufferLike | ArrayBufferView) {
+		if (ArrayBuffer.isView(data)) {
+			this.view = new DataView(
+				data.buffer,
+				data.byteOffset,
+				data.byteLength,
+			);
+		} else {
+			this.view = new DataView(data);
+		}
 	}
 
 	Int8() {
@@ -62,7 +79,7 @@ export class DataReader {
 	StringRef32(): StringRef {
 		return asStringRef(this.UInt32());
 	}
-	
+
 	BigIntRef16(): BigIntRef {
 		return asBigIntRef(this.UInt16());
 	}
@@ -82,11 +99,23 @@ export class DataReader {
 	}
 }
 
-export function Int8(io: DataReader) { return io.Int8(); }
-export function Int32(io: DataReader) { return io.Int32(); }
+export function Int8(io: DataReader) {
+	return io.Int8();
+}
+export function Int32(io: DataReader) {
+	return io.Int32();
+}
 
-export function UInt8(io: DataReader) { return io.UInt8(); }
-export function UInt16(io: DataReader) { return io.UInt16(); }
-export function UInt32(io: DataReader) { return io.UInt32(); }
+export function UInt8(io: DataReader) {
+	return io.UInt8();
+}
+export function UInt16(io: DataReader) {
+	return io.UInt16();
+}
+export function UInt32(io: DataReader) {
+	return io.UInt32();
+}
 
-export function Double(io: DataReader) { return io.Double(); }
+export function Double(io: DataReader) {
+	return io.Double();
+}

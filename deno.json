@@ -1,39 +1,49 @@
 {
-  "compilerOptions": {
-    "allowJs": true,
-    "lib": ["deno.window"],
-    "strict": true
-  },
-  "exclude": ["lib/parser/wasm/"]
-  "lint": {
-    "files": {
-      "include": ["lib/"],
-    },
-    "rules": {
-      "tags": ["recommended"]
-    }
-  },
-  "fmt": {
-    "files": {
-      "include": ["lib/"],
-    },
-    "options": {
-      "useTabs": true,
-      "lineWidth": 80,
-      "indentWidth": 4,
-      "singleQuote": true,
-      "proseWrap": "preserve"
-    }
-  },
-  "unstable": ["sloppy-imports"],
-  "imports": {
-    "@babel/types": "npm:@babel/types@^7.28.5",
-    "@babel/generator": "npm:@babel/generator@^7.28.5",
-    "@babel/traverse": "npm:@babel/traverse@^7.28.5",
-    "@types/babel__generator": "npm:@types/babel__generator@^7.27.0",
-    "@types/babel__traverse": "npm:@types/babel__traverse@^7.28.0",
-    "kaitai-struct": "npm:kaitai-struct@^0.11.0",
-    "module": "node:module",
-    "url": "node:url"
-  }
+	"tasks": {
+		"ares": "deno run --allow-env --allow-read --allow-write --allow-ffi src/ares.ts",
+		"build:wasm": "deno run -A lib/parser/build.ts",
+		"build:wasm:debug": "deno run -A lib/parser/wasm/build.ts --debug",
+		"check": "deno check src/ares.ts lib/ir/function/worker.ts lib/ir/compose/worker.ts",
+		"lint": "deno lint lib/ src/",
+		"test:unit": "deno test --allow-read --allow-env --allow-write --allow-ffi lib/",
+		"coverage:samples": "deno run --allow-read --allow-env --coverage=.coverage/samples coverage_harness.ts",
+		"coverage:samples:report": "deno coverage --include='^file:.*/lib/' --exclude='parser/wasm/(build|lib)' .coverage/samples",
+		"coverage:samples:detailed": "deno coverage --detailed --include='^file:.*/lib/' --exclude='parser/wasm/(build|lib)' .coverage/samples",
+		"cfg:audit:samples": "deno run --allow-read --allow-env --allow-run tools/compare_recursive_cfg_samples.ts --recursive-js --categorize",
+		"cfg:expect:samples": "deno run --allow-read --allow-env --allow-run tools/check_recursive_cfg_expectations.ts"
+	},
+	"compilerOptions": {
+		"lib": ["deno.window"],
+		"strict": true
+	},
+	"exclude": [
+		"lib/parser/wasm/lib/",
+		"lib/parser/wasm/target/"
+	],
+	"lint": {
+		"include": ["lib/", "src/"],
+		"rules": {
+			"tags": ["recommended"]
+		}
+	},
+	"fmt": {
+		"include": ["lib/"],
+		"useTabs": true,
+		"lineWidth": 80,
+		"indentWidth": 4,
+		"singleQuote": true,
+		"proseWrap": "preserve"
+	},
+	"unstable": ["sloppy-imports"],
+	"imports": {
+		"@babel/generator": "npm:@babel/generator@^8.0.0-rc.6",
+		"@babel/highlight": "npm:@babel/highlight@^7.25.9",
+		"@babel/parser": "npm:@babel/parser@^8.0.0-rc.6",
+		"@babel/traverse": "npm:@babel/traverse@^8.0.0-rc.6",
+		"@babel/types": "npm:@babel/types@^8.0.0-rc.6",
+		"lmdb": "npm:lmdb@^3.5.6",
+		"msgpackr": "npm:msgpackr@^1.11.2",
+		"module": "node:module",
+		"url": "node:url"
+	}
 }
